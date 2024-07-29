@@ -1,4 +1,5 @@
 import threading
+import time
 import cv2
 import numpy as np
 import logging
@@ -6,8 +7,7 @@ import logging
 from PyQt6.QtWidgets import QFileDialog
 
 from LabelChecker.LabelChecker import LabelChecker
-from QtUI.UI_Child import Ui_Main, CallbackType, GraphicWidgets
-
+from QtUI.UI_Child import Ui_Main, ButtonCallbackType, GraphicWidgets, WorkingParams
 
 
 class MainWorkingFlow():
@@ -16,6 +16,10 @@ class MainWorkingFlow():
         self._img_list = {}
         self._ui = ui
         self._stop_event = stop_event
+
+        # 运行时参数
+        self._params = WorkingParams()
+        self._params_lock = threading.Lock()
 
         # 图像成员变量, 写入dict方便用户debug
         self._img_dict = {}
@@ -29,12 +33,17 @@ class MainWorkingFlow():
         ### _template_lock 用于保持上述三个图像及id的互斥访问
         self._template_lock = threading.Lock()
 
-
         ## 待检图像及其互斥锁、条件变量。条件变量用于同步视频流等输入
         self._img_dict["待检图像"] = None
         self._img_dict["标签"] = []
-        self._target_img_cond = threading.Condition()
+        ### _target_id 用于检测目标图像是否变化
+        self._target_id = 0
+        ### _target_lock 用于保持上述两个图像及id的互斥访问
         self._target_lock = threading.Lock()
+
+        # "输入变化" 事件的条件变量
+        self._input_changed = False
+        self._input_changed_lock = threading.Lock()
 
 
     """
@@ -42,8 +51,9 @@ class MainWorkingFlow():
     """
     def _init(self):
         # 配置回调函数
-        self._ui.set_callback(CallbackType.OpenTemplateClicked, self._open_template_cb)
-        self._ui.set_callback(CallbackType.OpenTargetPhotoClicked, self._open_target_photo_cb)
+        self._ui.set_btn_callback(ButtonCallbackType.OpenTemplateClicked, self._open_template_cb)
+        self._ui.set_btn_callback(ButtonCallbackType.OpenTargetPhotoClicked, self._open_target_photo_cb)
+        self._ui.set_params_changed_callback(self._working_param_changed_cb)
 
 
     """
@@ -66,6 +76,8 @@ class MainWorkingFlow():
                 try:
                     self._img_dict["模板原始图像"] = cv2.imread(template_file)
                     self._template_id += 1
+                    with self._input_changed_lock:
+                        self._input_changed = True
                 except Exception as e:
                     logging.error(e)
 
@@ -79,10 +91,21 @@ class MainWorkingFlow():
             with self._target_lock:
                 try:
                     self._img_dict["待检图像"] = cv2.imread(target_img_file)
-                    with self._target_img_cond:
-                        self._target_img_cond.notify()
+                    self._target_id += 1
+                    with self._input_changed_lock:
+                        self._input_changed = True
                 except Exception as e:
                     logging.error(e)
+
+
+    """
+    @brief: "参数调整区"的回调函数
+    """
+    def _working_param_changed_cb(self, params:WorkingParams):
+        with self._params_lock:
+            self._params = params
+        with self._input_changed_lock:
+            self._input_changed = True
 
 
     """
@@ -147,7 +170,6 @@ class MainWorkingFlow():
         return target_pattern
 
 
-
     """
     @brief: 将target_img图像中指定的target_rect所在的标签与template_pattern进行匹配
     @param:
@@ -200,7 +222,7 @@ class MainWorkingFlow():
         target_trans = self._checker.linear_trans_to(
             img=target_wraped, x=x, y=y, angle=angle, output_size=[template_pattern.shape[1], template_pattern.shape[0]], border_color=[255, 255, 255]
         )
-        return [diff, target_trans]
+        return [ diff, target_trans ]
 
 
 
@@ -225,104 +247,129 @@ class MainWorkingFlow():
         box_thickness = 3
 
         curr_template_id = 0
+        curr_target_id = 0
         # 检测退出标志
         while(not self._stop_event.is_set()):
-            # 检测、更新并同步模板图像
-            with self._template_lock:
-                if(curr_template_id != self._template_id):
-                    # 模板需要更新
-                    template_img = self._img_dict["模板原始图像"].copy()
-                    self._img_dict["模板图像"], self._img_dict["模板样式"] = self._process_template(
-                        template_img=template_img,
-                        threshold=threshold
-                    )
-                    template_wraped = self._img_dict["模板图像"]
-                    template_pattern = self._checker.get_pattern(template_wraped, threshold)
-                    template_w = template_wraped.shape[1]
-                    template_h = template_wraped.shape[0]
-                    # 在UI中更新图像
-                    self._ui.set_graphic_widget(self._img_dict["模板图像"], GraphicWidgets.TemplateGraphicView)
-                    curr_template_id = self._template_id
+            # 检测是否需要开启下一批计算
+            input_changed = False
+            with self._input_changed_lock:
+                input_changed = self._input_changed
+                self._input_changed = False
+                
+            
+            # 当输入变化时, 重新运算
+            if(input_changed):
+                params = None
+                # 拷贝一份参数
+                with self._params_lock:
+                    params = self._params
 
+                # 输入参数发生变化, 重新执行检测标签
+                ## 检测、更新并同步模板图像
+                with self._template_lock:
+                    if(curr_template_id != self._template_id):
+                        # 模板需要更新
+                        template_img = self._img_dict["模板原始图像"].copy()
+                        self._img_dict["模板图像"], self._img_dict["模板样式"] = self._process_template(
+                            template_img=template_img,
+                            threshold=params.depth_threshold
+                        )
+                        template_wraped = self._img_dict["模板图像"]
+                        template_pattern = self._checker.get_pattern(template_wraped, params.depth_threshold)
+                        template_w = template_wraped.shape[1]
+                        template_h = template_wraped.shape[0]
+                        # 在UI中更新图像
+                        self._ui.set_graphic_widget(self._img_dict["模板图像"], GraphicWidgets.TemplateGraphicView)
+                        curr_template_id = self._template_id
 
-            # 等待得到新的待测图像
-            with self._target_img_cond:
-                if(self._target_img_cond.wait(timeout=0.1)):
-                    with self._target_lock:
+                ## 检测、更新并同步待测图像
+                with self._target_lock:
+                    if(curr_target_id != self._target_id):
+                        # 目标需要更新
                         target_img = self._img_dict["待检图像"].copy()
-                    
-                    
-                    # 开始对待检图像进行图像处理 TODO
-                    rects = self._find_labels(
-                        target_img,
-                        template_w=template_w,
-                        template_h=template_h
+
+                ## 检查运行条件是否满足
+                if(not isinstance(template_img, np.ndarray)):
+                    continue
+
+                if(not isinstance(target_img, np.ndarray)):
+                    continue
+
+                ## 开始对待检图像进行图像处理 TODO
+                rects = self._find_labels(
+                    target_img,
+                    template_w=template_w,
+                    template_h=template_h
+                )
+
+                # 匹配并绘制标签
+                target_img_with_mark = target_img.copy()
+                id = 0
+                ## 存储结果
+                target_result = {}
+                for r in rects:
+                    # 匹配标签并获得缺陷图
+                    diff, target_trans = self._match_label( 
+                        template_pattern=template_pattern,
+                        target_img=target_img,
+                        target_rect=r,
+                        threshold=params.depth_threshold,
+                        thickness_tol=params.linear_error
                     )
 
-                    # 匹配并绘制标签
-                    target_img_with_mark = target_img.copy()
-                    id = 0
-                    ## 存储结果
-                    target_result = {}
-                    for r in rects:
-                        # 匹配标签并获得缺陷图
-                        diff, target_trans = self._match_label( 
-                            template_pattern, target_img, r, threshold
-                        )
-
-                        # 计算误差
-                        loss = cv2.countNonZero(diff)
-                        ## 判断阈值
-                        logging.info("label: %d, loss: %d"%(id, loss))
-                        ## 绘制方框
-                        if(loss > 40000):
-                            # 不同类标签
-                            target_img_with_mark = cv2.drawContours(target_img_with_mark, [np.int_(cv2.boxPoints(r))], 0, (0, 0, 255), 2)
-                        elif(loss > 100):
-                            # 同类较差标签
-                            target_img_with_mark = cv2.drawContours(target_img_with_mark, [np.int_(cv2.boxPoints(r))], 0, (0, 0, 0), 2)
-                        else:
-                            # 同类较优标签
-                            target_img_with_mark = cv2.drawContours(target_img_with_mark, [np.int_(cv2.boxPoints(r))], 0, (0, 255, 0), 2)
-                        
-                        ## 绘制标签
-                        target_img_with_mark = cv2.putText(
-                            img=target_img_with_mark, 
-                            text="id: " + str(id), 
-                            org=(int(r[0][0] - template_w / 2), int(r[0][1] - template_h / 2)),
-                            fontFace=cv2.FONT_HERSHEY_SIMPLEX, 
-                            fontScale=0.75, 
-                            color=(0, 0, 255), 
-                            thickness=2
-                        )
-
-                        # 绘制误差点并输出图像
-                        if(loss < 100):
-                            # 同类标签中绘制误差点
-                            contours, hierarchy = cv2.findContours(diff, mode=cv2.RETR_TREE, method=cv2.CHAIN_APPROX_NONE)
-                            for c in contours:
-                                x, y, w, h = cv2.boundingRect(c)
-                                cv2.rectangle(
-                                    target_trans, 
-                                    (x - box_thickness, y - box_thickness), 
-                                    (x + w + box_thickness, y + h + box_thickness), 
-                                    (0, 0, 255), 
-                                    box_thickness
-                                ) 
-                            # show
-                            target_result["id: " + str(id)] = target_trans
-                            #cv2.imshow(str(id), target_trans)
-
-                        id += 1
+                    # 计算误差
+                    loss = cv2.countNonZero(diff)
+                    ## 判断阈值
+                    logging.info("label: %d, loss: %d"%(id, loss))
+                    ## 绘制方框
+                    if(loss > params.class_similarity):
+                        # 不同类标签
+                        target_img_with_mark = cv2.drawContours(target_img_with_mark, [np.int_(cv2.boxPoints(r))], 0, (0, 0, 255), 2)
+                    elif(loss > 100):
+                        # 同类较差标签
+                        target_img_with_mark = cv2.drawContours(target_img_with_mark, [np.int_(cv2.boxPoints(r))], 0, (0, 0, 0), 2)
+                    else:
+                        # 同类较优标签
+                        target_img_with_mark = cv2.drawContours(target_img_with_mark, [np.int_(cv2.boxPoints(r))], 0, (0, 255, 0), 2)
                     
-                    # show
+                    ## 绘制标签
+                    target_img_with_mark = cv2.putText(
+                        img=target_img_with_mark, 
+                        text="id: " + str(id), 
+                        org=(int(r[0][0] - template_w / 2), int(r[0][1] - template_h / 2)),
+                        fontFace=cv2.FONT_HERSHEY_SIMPLEX, 
+                        fontScale=0.75, 
+                        color=(0, 0, 255), 
+                        thickness=2
+                    )
+
+                    # 绘制误差点并输出图像
+                    if(loss < 100):
+                        # 同类标签中绘制误差点
+                        contours, hierarchy = cv2.findContours(diff, mode=cv2.RETR_TREE, method=cv2.CHAIN_APPROX_NONE)
+                        for c in contours:
+                            x, y, w, h = cv2.boundingRect(c)
+                            cv2.rectangle(
+                                target_trans, 
+                                (x - box_thickness, y - box_thickness), 
+                                (x + w + box_thickness, y + h + box_thickness), 
+                                (0, 0, 255), 
+                                box_thickness
+                            ) 
+                        # show
+                        target_result["id: " + str(id)] = target_trans
+
+                    id += 1
+                
+                # 在操作ui之前确保程序没有被退出
+                if(not self._stop_event.is_set()):
                     self._ui.set_graphic_detail_list(target_result)
-
                     self._ui.set_graphic_widget(target_img_with_mark, GraphicWidgets.MainGraphicView)
-                    pass
-
-            #cv2.waitKey(1)
-
+                else:
+                    logging.info("main workflow exit.")
+            
+            # Sleep 0.02s
+            time.sleep(0.02)
         logging.info("main workflow exit.")
 
 
@@ -337,5 +384,4 @@ class MainWorkingFlow():
         else:
             self._main_thread = threading.Thread(target = self._main)
             self._main_thread.start()
-
 
