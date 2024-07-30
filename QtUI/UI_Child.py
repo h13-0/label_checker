@@ -7,7 +7,7 @@ import logging
 from enum import Enum
 import cv2
 from functools import partial
-
+from types import MethodType
 
 class ButtonCallbackType(Enum):
     OpenTemplateClicked = 1
@@ -86,10 +86,20 @@ class Ui_Main(UI.Ui_LabelChecker, QWidget):
         # 默认参数
         self._param = WorkingParams()
 
-    def wheelEvent(self, ev):
-        mods = ev.modifiers()
-        print('mods=', mods)
-        delta = ev.angleDelta()
+    def wheelEvent(self, scroll, ev):
+        delta = ev.angleDelta().y()
+        scale = 1 + delta / 1000.0
+
+        match QApplication.focusWidget():
+            case self.MainGraphicView:
+                self.MainGraphicView.scale(scale, scale)
+            case self.TemplateGraphicView:
+                self.TemplateGraphicView.scale(scale, scale)
+            case self.GraphicDetialList:
+                pass
+                #self._graphics_scale_ratio["GraphicList"] += delta
+
+        #scroll(0, ev.angleDelta().y())
 
 
 
@@ -116,13 +126,9 @@ class Ui_Main(UI.Ui_LabelChecker, QWidget):
             self._graphic_widgets[widgets].setScene(
                 self._graphic_widgets_scenes[widgets]
             )
+
+        # "图像详情列表"的控件及其scene
     
-        # 各Graphics的缩放系数
-        self._graphics_scale_ratio = {
-            GraphicWidgets.MainGraphicView.name: 1.0,
-            GraphicWidgets.TemplateGraphicView.name: 1.0,
-            "GraphicList": 1.0
-        }
 
         # 连接回调函数
         ## 按钮点击事件
@@ -162,14 +168,13 @@ class Ui_Main(UI.Ui_LabelChecker, QWidget):
         self._set_graphic_detail_signal.connect(self._set_graphic_detail_content, type=Qt.ConnectionType.BlockingQueuedConnection)
         
         ## GraphicView 鼠标滚动缩放
-
+        self.MainGraphicView.wheelEvent = MethodType(self.wheelEvent, self.scroll)
+        self.TemplateGraphicView.wheelEvent = MethodType(self.wheelEvent, self.scroll)
+        #self.MainGraphicView.wheelEvent = MethodType(self.wheelEvent, self.scroll)
+        #self.MainGraphicView.keyPressEvent
 
         ## MessageBox
         self._make_msg_box_signal.connect(self._make_msg_box)
-    
-
-    def _call_test(self, spinbox):
-        print("call, spin: " + str(spinbox.value()))
 
 
     def _connect_param_widgets_signal(self, param_widget_map:dict):
@@ -320,15 +325,9 @@ class Ui_Main(UI.Ui_LabelChecker, QWidget):
         target_h = self._graphic_widgets[target.name].height()
         logging.debug("Widget: %s, size: (%d, %d)"%(target.name, target_w, target_h))
         ## 居中铺满放置
-        img_w = cv2_img.shape[1]
-        img_h = cv2_img.shape[0]
-        ## 计算缩放比例 TODO
-        #ratio = min(float(target_w)/img_w, float(target_h)/img_h)
-        ratio = 1
-        img = cv2.resize(cv2_img, (0, 0), fx=ratio, fy=ratio)
-        rgb_img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-        y = img.shape[0]
-        x = img.shape[1]
+        rgb_img = cv2.cvtColor(cv2_img, cv2.COLOR_BGR2RGB)
+        y = cv2_img.shape[0]
+        x = cv2_img.shape[1]
         frame = QImage(rgb_img, x, y, x * 3, QImage.Format.Format_RGB888)
         self._update_graphic_signal.emit(frame, target)
 
