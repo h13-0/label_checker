@@ -40,9 +40,9 @@ class GraphicWidgets(Enum):
 class WorkingParams():
     def __init__(self, 
         h_min:int = 0, h_max:int = 170, s_min:int = 13, s_max:int = 255,
-        depth_threshold:int = 170, class_similarity:float = 0.1, 
-        not_good_similarity:float = 0.1, linear_error:int = 4,
-        defect_min_area:int = 100
+        depth_threshold:int = 170, class_similarity:int = 90, 
+        not_good_similarity:int = 95, linear_error:int = 5,
+        defect_min_area:int = 5
     ) -> None:
         self.h_min = h_min
         self.h_max = h_max

@@ -6,13 +6,17 @@ from QtUI.UI_Child import Ui_Main
 
 import sys
 import threading
+import logging
 
 from Workflow.MainWorkflow import MainWorkingFlow
 
 
 if __name__ == '__main__':
-    # 退出信号
+    # 初始化退出信号
     stop_event = threading.Event()
+
+    # 设置日志等级
+    logging.basicConfig(level=logging.DEBUG)
 
     # 初始化UI
     app = QApplication(sys.argv)

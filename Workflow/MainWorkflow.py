@@ -249,21 +249,19 @@ class MainWorkingFlow():
 
     def _main(self):
         self._init()
-        logging.basicConfig(level=logging.DEBUG)
 
         # 模板原图
         template_img = None
         ## 仿射后的标签
         template_wraped = None
         template_pattern = None
+        template_pattern_size = 0
         template_w = 0
         template_h = 0
 
         # 目标原图
         target_img = None
 
-        # 检测参数
-        threshold = 170
         # 最终错误方框粗细
         box_thickness = 3
 
@@ -303,6 +301,8 @@ class MainWorkingFlow():
                         )
                         template_wraped = self._img_dict["模板图像"]
                         template_pattern = self._checker.get_pattern(template_wraped, params.depth_threshold)
+                        template_pattern_size = cv2.countNonZero(template_pattern)
+                        logging.debug("@main:template_pattern_size: %d"%(template_pattern_size))
                         template_w = template_wraped.shape[1]
                         template_h = template_wraped.shape[0]
                         # 在UI中更新图像
@@ -354,12 +354,13 @@ class MainWorkingFlow():
                     # 计算误差
                     loss = cv2.countNonZero(diff)
                     ## 判断阈值
-                    logging.info("label: %d, loss: %d"%(id, loss))
+                    similarity = (template_pattern_size - loss)/float(template_pattern_size)
+                    logging.info("label: %d, final_loss: %d, similarity: %f"%(id, loss, similarity))
                     ## 绘制方框
-                    if(loss > params.class_similarity):
+                    if(similarity * 100 < params.class_similarity):
                         # 不同类标签
                         target_img_with_mark = cv2.drawContours(target_img_with_mark, [np.int_(cv2.boxPoints(r))], 0, (0, 0, 255), 2)
-                    elif(loss > 100):
+                    elif(similarity * 100 < params.not_good_similarity):
                         # 同类较差标签
                         target_img_with_mark = cv2.drawContours(target_img_with_mark, [np.int_(cv2.boxPoints(r))], 0, (0, 0, 0), 2)
                     else:
@@ -378,18 +379,21 @@ class MainWorkingFlow():
                     )
 
                     # 绘制误差点并输出图像
-                    if(loss < 100):
+                    if(loss < params.class_similarity):
                         # 同类标签中绘制误差点
                         contours, hierarchy = cv2.findContours(diff, mode=cv2.RETR_TREE, method=cv2.CHAIN_APPROX_NONE)
                         for c in contours:
                             x, y, w, h = cv2.boundingRect(c)
-                            cv2.rectangle(
-                                target_trans, 
-                                (x - box_thickness, y - box_thickness), 
-                                (x + w + box_thickness, y + h + box_thickness), 
-                                (0, 0, 255), 
-                                box_thickness
-                            ) 
+                            size = w * h
+                            if(size > params.defect_min_area):
+                                cv2.rectangle(
+                                    target_trans, 
+                                    (x - box_thickness, y - box_thickness), 
+                                    (x + w + box_thickness, y + h + box_thickness), 
+                                    (0, 0, 255), 
+                                    box_thickness
+                                )
+                            logging.debug("label: %d, defect size: %d"%(id, w * h))
                         # show
                         target_result["id: " + str(id)] = target_trans
 

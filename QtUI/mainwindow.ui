@@ -527,13 +527,13 @@
           <item>
            <widget class="QSlider" name="ClassSimilaritySldider">
             <property name="maximum">
-             <number>10000</number>
+             <number>100</number>
             </property>
             <property name="singleStep">
              <number>0</number>
             </property>
             <property name="value">
-             <number>4000</number>
+             <number>90</number>
             </property>
             <property name="orientation">
              <enum>Qt::Orientation::Horizontal</enum>
@@ -549,10 +549,10 @@
              </size>
             </property>
             <property name="maximum">
-             <number>10000</number>
+             <number>100</number>
             </property>
             <property name="value">
-             <number>4000</number>
+             <number>90</number>
             </property>
            </widget>
           </item>
@@ -561,7 +561,7 @@
         <item>
          <widget class="QLabel" name="label_8">
           <property name="text">
-           <string>缺陷标签误差容许值(%, 本参数应当小于上一个参数)：</string>
+           <string>缺陷标签相似度容许值(%, 本参数应当小于上一个参数)：</string>
           </property>
          </widget>
         </item>
@@ -572,6 +572,12 @@
           </property>
           <item>
            <widget class="QSlider" name="NotGoodSimilaritySlider">
+            <property name="maximum">
+             <number>100</number>
+            </property>
+            <property name="value">
+             <number>95</number>
+            </property>
             <property name="orientation">
              <enum>Qt::Orientation::Horizontal</enum>
             </property>
@@ -584,6 +590,12 @@
               <width>85</width>
               <height>30</height>
              </size>
+            </property>
+            <property name="maximum">
+             <number>100</number>
+            </property>
+            <property name="value">
+             <number>95</number>
             </property>
            </widget>
           </item>
@@ -643,6 +655,9 @@
           </property>
           <item>
            <widget class="QSlider" name="DefectMinAreaSlider">
+            <property name="value">
+             <number>5</number>
+            </property>
             <property name="orientation">
              <enum>Qt::Orientation::Horizontal</enum>
             </property>
@@ -655,6 +670,9 @@
               <width>85</width>
               <height>30</height>
              </size>
+            </property>
+            <property name="value">
+             <number>5</number>
             </property>
            </widget>
           </item>

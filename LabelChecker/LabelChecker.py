@@ -302,9 +302,9 @@ class LabelChecker():
                             min_loss = xy_loss[i][j]
                             min_dxy = [ j - 1, i - 1 ]
                 
-                logging.info("xy_loss matrix: %s"%(str(xy_loss)))
-                logging.info("minxy: %s"%(str(min_dxy)))
-                logging.info("minloss: %d"%(min_loss))
+                logging.debug("xy_loss matrix: %s"%(str(xy_loss)))
+                logging.debug("minxy: %s"%(str(min_dxy)))
+                logging.debug("minloss: %d"%(min_loss))
 
                 # 当中心也为最小值时则不移动，同时停止匹配
                 if(xy_loss[1][1] == min_loss):
@@ -364,9 +364,9 @@ class LabelChecker():
                 if(angle_loss[view_size] == min_loss):
                     min_da = 0
 
-                logging.info("angle loss vector: %s"%(angle_loss))
-                logging.info("min_da: %d"%(min_da))
-                logging.info("min_loss: %d"%(min_loss))
+                logging.debug("angle loss vector: %s"%(angle_loss))
+                logging.debug("min_da: %d"%(min_da))
+                logging.debug("min_loss: %d"%(min_loss))
 
                 
                 _ = curr_a + min_da * angle_step
