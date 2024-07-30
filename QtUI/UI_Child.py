@@ -1,7 +1,7 @@
 from QtUI import UI
 from PyQt6 import QtCore, QtWidgets
-from PyQt6.QtCore import pyqtSignal, Qt
-from PyQt6.QtWidgets import QWidget, QGraphicsScene, QGraphicsPixmapItem, QVBoxLayout, QMessageBox, QSpinBox, QLineEdit, QApplication
+from PyQt6.QtCore import pyqtSignal, Qt, QEvent
+from PyQt6.QtWidgets import QWidget, QGraphicsScene, QGraphicsPixmapItem, QVBoxLayout, QMessageBox, QApplication
 from PyQt6.QtGui import QPixmap, QImage
 import logging
 from enum import Enum
@@ -86,22 +86,39 @@ class Ui_Main(UI.Ui_LabelChecker, QWidget):
         # 默认参数
         self._param = WorkingParams()
 
-    def wheelEvent(self, scroll, ev):
-        delta = ev.angleDelta().y()
-        scale = 1 + delta / 1000.0
+    def _wheel_event(self, widget, event):
+        if(self._ctrl_pressed):
+            delta = event.angleDelta().y()
+            scale = 1 + delta / 1000.0
 
-        match QApplication.focusWidget():
-            case self.MainGraphicView:
-                self.MainGraphicView.scale(scale, scale)
-            case self.TemplateGraphicView:
-                self.TemplateGraphicView.scale(scale, scale)
-            case self.GraphicDetialList:
-                pass
-                #self._graphics_scale_ratio["GraphicList"] += delta
+            if(
+                widget == self.MainGraphicView or
+                widget == self.TemplateGraphicView
+            ):
+                widget.scale(scale, scale)
+            elif(widget in self._graphic_details_graphic_view_list):
+                for i in range(len(self._graphic_details_graphic_view_list)):
+                    self._graphic_details_graphic_view_list[i].scale(scale, scale)
+                    width = self._graphic_details_graphic_view_list[i].width() + 20
+                    height = self._graphic_details_graphic_view_list[i].height() + 30
+                    self._graphic_details_group_box_list[i].setMaximumWidth(width)
+                    self._graphic_details_group_box_list[i].setMinimumWidth(width)
+                    self._graphic_details_group_box_list[i].setMaximumHeight(height)
+                    self._graphic_details_group_box_list[i].setMinimumHeight(height)
 
-        #scroll(0, ev.angleDelta().y())
 
-
+    def _keyboard_event(self, widget, event):
+        if(
+            event.key() == 16777249 and #ctrl
+            event.type() == QEvent.Type.KeyPress
+        ):
+            self._ctrl_pressed = True
+        elif(
+            event.key() == 16777249 and #ctrl
+            event.type() == QEvent.Type.KeyRelease
+        ):
+            self._ctrl_pressed = False
+        pass
 
 
     def setupUi(self, MainWindow):
@@ -112,6 +129,7 @@ class Ui_Main(UI.Ui_LabelChecker, QWidget):
         self.GraphicDetialListvLayout = QVBoxLayout(self.GraphicDetialListContents)
         self.GraphicDetialListContents.setLayout(self.GraphicDetialListvLayout)
         self.GraphicDetialList.setWidget(self.GraphicDetialListContents)
+        print(self.GraphicDetialList)
 
         # 常驻GraphicView的控件及其scene
         self._graphic_widgets = {
@@ -127,8 +145,10 @@ class Ui_Main(UI.Ui_LabelChecker, QWidget):
                 self._graphic_widgets_scenes[widgets]
             )
 
-        # "图像详情列表"的控件及其scene
-    
+        # "图像详情列表"的GroupBox、GraphicView及GraphicsScene
+        self._graphic_details_group_box_list = []
+        self._graphic_details_graphic_view_list = []
+        self._graphic_details_graphic_scene_list = []
 
         # 连接回调函数
         ## 按钮点击事件
@@ -168,13 +188,18 @@ class Ui_Main(UI.Ui_LabelChecker, QWidget):
         self._set_graphic_detail_signal.connect(self._set_graphic_detail_content, type=Qt.ConnectionType.BlockingQueuedConnection)
         
         ## GraphicView 鼠标滚动缩放
-        self.MainGraphicView.wheelEvent = MethodType(self.wheelEvent, self.scroll)
-        self.TemplateGraphicView.wheelEvent = MethodType(self.wheelEvent, self.scroll)
-        #self.MainGraphicView.wheelEvent = MethodType(self.wheelEvent, self.scroll)
-        #self.MainGraphicView.keyPressEvent
+        self.MainGraphicView.wheelEvent = MethodType(self._wheel_event, self.MainGraphicView)
+        self.TemplateGraphicView.wheelEvent = MethodType(self._wheel_event, self.TemplateGraphicView)
 
         ## MessageBox
         self._make_msg_box_signal.connect(self._make_msg_box)
+
+        ## 键盘按下和松开事件
+        self._ctrl_pressed = False
+        self.MainGraphicView.keyPressEvent = MethodType(self._keyboard_event, self.MainGraphicView)
+        self.TemplateGraphicView.keyPressEvent = MethodType(self._keyboard_event, self.TemplateGraphicView)
+        self.MainGraphicView.KeyReleaseEvent = MethodType(self._keyboard_event, self.MainGraphicView)
+        self.TemplateGraphicView.KeyReleaseEvent = MethodType(self._keyboard_event, self.TemplateGraphicView)
 
 
     def _connect_param_widgets_signal(self, param_widget_map:dict):
@@ -261,34 +286,48 @@ class Ui_Main(UI.Ui_LabelChecker, QWidget):
     """
     def _set_graphic_detail_content(self, details:dict):
         # 清除UI中所有现存图像
-        while self.GraphicDetialListvLayout.count():
-            item = self.GraphicDetialListvLayout.takeAt(0)
-            widget = item.widget()
-            if widget is not None:
-                widget.deleteLater()
+        for view in self._graphic_details_graphic_view_list:
+            view.deleteLater()
+        self._graphic_details_graphic_view_list = []
+
+        for scene in self._graphic_details_graphic_scene_list:
+            scene.clear()
+            scene.deleteLater()
+        self._graphic_details_graphic_scene_list = []
+
+        for box in self._graphic_details_group_box_list:
+            box.deleteLater()
+        self._graphic_details_group_box_list = []
 
         # 绘制新图像
         for title in details:
             img = details[title]
-            img_w = img.width()
-            img_h = img.height()
+
+            box_w = self.GraphicDetialList.width() - 30
+            box_h = int((self.GraphicDetialList.width() / img.width()) * img.height()) + 30
+
+
             # 创建GroupBox
             group_box = QtWidgets.QGroupBox(title, parent=self.GraphicDetialList)
-            group_box.setMinimumSize(QtCore.QSize(img_w + 20, img_h + 30))
-            group_box.setMaximumSize(QtCore.QSize(img_w + 20, img_h + 30))
+            group_box.setMinimumSize(QtCore.QSize(box_w, box_h))
+            group_box.setMaximumSize(QtCore.QSize(box_w, box_h))
             self.GraphicDetialListvLayout.addWidget(group_box)
+            self._graphic_details_group_box_list.append(group_box)
         
             # 创建scene
             scene = QGraphicsScene()
+            self._graphic_details_graphic_scene_list.append(scene)
             # 创建GraphicView
             graphic_view = QtWidgets.QGraphicsView(group_box)
             graphic_view.setObjectName(title + "GrapgicView")
-            graphic_view.setMinimumSize(QtCore.QSize(img_w, img_h))
-            graphic_view.setMaximumSize(QtCore.QSize(img_w, img_h))
+            graphic_view.setMinimumSize(QtCore.QSize(box_w - 20, box_h - 30))
+            graphic_view.setMaximumSize(QtCore.QSize(box_w - 20, box_h - 30))
             graphic_view.move(10, 20)
             graphic_view.setScene(scene)
-            graphic_view.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-            graphic_view.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+            graphic_view.wheelEvent = MethodType(self._wheel_event, graphic_view)
+            graphic_view.keyPressEvent = MethodType(self._keyboard_event, graphic_view)
+            graphic_view.keyPressEvent = MethodType(self._keyboard_event, graphic_view)
+            self._graphic_details_graphic_view_list.append(graphic_view)
         
             pixmap = QPixmap.fromImage(img)
             pixmap_item = QGraphicsPixmapItem(pixmap)
