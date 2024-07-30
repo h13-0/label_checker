@@ -354,7 +354,7 @@ class MainWorkingFlow():
                     # 计算误差
                     loss = cv2.countNonZero(diff)
                     ## 判断阈值
-                    similarity = (template_pattern_size - loss)/float(template_pattern_size)
+                    similarity = abs(template_pattern_size - loss)/float(template_pattern_size)
                     logging.info("label: %d, final_loss: %d, similarity: %f"%(id, loss, similarity))
                     ## 绘制方框
                     if(similarity * 100 < params.class_similarity):

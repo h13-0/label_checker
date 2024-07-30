@@ -86,7 +86,14 @@ class Ui_Main(UI.Ui_LabelChecker, QWidget):
         # 默认参数
         self._param = WorkingParams()
 
-    
+    def wheelEvent(self, ev):
+        mods = ev.modifiers()
+        print('mods=', mods)
+        delta = ev.angleDelta()
+
+
+
+
     def setupUi(self, MainWindow):
         super().setupUi(MainWindow)
 
@@ -109,9 +116,16 @@ class Ui_Main(UI.Ui_LabelChecker, QWidget):
             self._graphic_widgets[widgets].setScene(
                 self._graphic_widgets_scenes[widgets]
             )
+    
+        # 各Graphics的缩放系数
+        self._graphics_scale_ratio = {
+            GraphicWidgets.MainGraphicView.name: 1.0,
+            GraphicWidgets.TemplateGraphicView.name: 1.0,
+            "GraphicList": 1.0
+        }
 
         # 连接回调函数
-        ## 按钮
+        ## 按钮点击事件
         self.OpenTemplateButton.clicked.connect(lambda:self._btn_callbacks(ButtonCallbackType.OpenTemplateClicked))
         self.OpenTargetStreamButton.clicked.connect(lambda:self._btn_callbacks(ButtonCallbackType.OpenTargetStreamClicked))
         self.OpenTargetPhotoButton.clicked.connect(lambda:self._btn_callbacks(ButtonCallbackType.OpenTargetPhotoClicked))
@@ -143,12 +157,14 @@ class Ui_Main(UI.Ui_LabelChecker, QWidget):
         self.LinearErrorSlider.valueChanged.connect(lambda:self.LinearErrorSpinBox.setValue(self.LinearErrorSlider.value()))
         self.DefectMinAreaSlider.valueChanged.connect(lambda:self.DefectMinAreaSpinBox.setValue(self.DefectMinAreaSlider.value()))
         
-
-        #self.DepthThresholdSlider.valueChanged.connect(lambda:self.DepthThresholdSpinBox.setValue(self.DepthThresholdSlider.value()))
-
+        ## GraphicView 更新图像
         self._update_graphic_signal.connect(self._update_graphic_view, type=Qt.ConnectionType.BlockingQueuedConnection)
         self._set_graphic_detail_signal.connect(self._set_graphic_detail_content, type=Qt.ConnectionType.BlockingQueuedConnection)
         
+        ## GraphicView 鼠标滚动缩放
+
+
+        ## MessageBox
         self._make_msg_box_signal.connect(self._make_msg_box)
     
 
