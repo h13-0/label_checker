@@ -379,7 +379,7 @@ class MainWorkingFlow():
                     )
 
                     # 绘制误差点并输出图像
-                    if(loss < params.class_similarity):
+                    if(similarity * 100 > params.class_similarity):
                         # 同类标签中绘制误差点
                         contours, hierarchy = cv2.findContours(diff, mode=cv2.RETR_TREE, method=cv2.CHAIN_APPROX_NONE)
                         for c in contours:
