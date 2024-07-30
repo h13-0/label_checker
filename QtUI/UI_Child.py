@@ -6,32 +6,48 @@ from PyQt6.QtGui import QPixmap, QImage
 import logging
 from enum import Enum
 import cv2
+from functools import partial
 
 
 class ButtonCallbackType(Enum):
-    OpenTemplateClicked = 1,
-    OpenTargetStreamClicked = 2,
-    OpenTargetPhotoClicked = 3,
-    LoadParamsClicked = 4,
+    OpenTemplateClicked = 1
+    OpenTargetStreamClicked = 2
+    OpenTargetPhotoClicked = 3
+    LoadParamsClicked = 4
 
 
 """
 @brief: 窗口的常驻图像控件(GraphicView)的枚举类
 """
 class GraphicWidgets(Enum):
-    MainGraphicView = 1,
+    MainGraphicView = 1
     TemplateGraphicView = 2
 
 
 """
 @brief: 参数区运行参数结构体
+@param:
+    - h_min: 标签色块寻找时最低色相值
+    - h_max: 标签色块寻找时最高色相值
+    - s_min: 标签色块寻找时最低饱和度
+    - s_max: 标签色块寻找时最高饱和度
+    - depth_threshold: 标签的打印样式黑度阈值
+    - class_similarity: 判定同类标签的相似度
+    - not_good_similarity: 同类标签中不合格标签的相似度
+    - linear_error: 容许的线性误差
+    - defect_min_area: 检出缺陷最小面积
 """
 class WorkingParams():
     def __init__(self, 
+        h_min:int = 0, h_max:int = 170, s_min:int = 13, s_max:int = 255,
         depth_threshold:int = 170, class_similarity:float = 0.1, 
         not_good_similarity:float = 0.1, linear_error:int = 4,
         defect_min_area:int = 100
     ) -> None:
+        self.h_min = h_min
+        self.h_max = h_max
+        self.s_min = s_min
+        self.s_max = s_max
         self.depth_threshold = depth_threshold
         self.class_similarity = class_similarity
         self.not_good_similarity = not_good_similarity
@@ -39,16 +55,19 @@ class WorkingParams():
         self.defect_min_area = defect_min_area
 
 
-
 """
 @brief: 私有类, 用于标识参数变化源
 """
 class _param_changed_source(Enum):
-    DepthThresholdChanged = 1,
-    ClassSimilarityChanged = 2,
-    NotGoodSimilarityChanged = 3,
-    LinearErrorChanged = 4,
-    DefectMinAreaChanged = 5
+    HMinChagned = 1
+    HMaxChanged = 2
+    SMinChanged = 3
+    SMaxChanged = 4
+    DepthThresholdChanged = 5
+    ClassSimilarityChanged = 6
+    NotGoodSimilarityChanged = 7
+    LinearErrorChanged = 8
+    DefectMinAreaChanged = 9
 
 
 class Ui_Main(UI.Ui_LabelChecker, QWidget):
@@ -99,31 +118,57 @@ class Ui_Main(UI.Ui_LabelChecker, QWidget):
         self.LoadParamsButton.clicked.connect(lambda:self._btn_callbacks(ButtonCallbackType.LoadParamsClicked))
 
         ## 参数区回调函数
-        ### 滑动条松开时触发信号
-        self.DepthThresholdSlider.sliderReleased.connect(lambda:self._param_changed_cb(_param_changed_source.DepthThresholdChanged))
-        self.ClassSimilaritySldider.sliderReleased.connect(lambda:self._param_changed_cb(_param_changed_source.ClassSimilarityChanged))
-        self.NotGoodSimilaritySlider.sliderReleased.connect(lambda:self._param_changed_cb(_param_changed_source.NotGoodSimilarityChanged))
-        self.LinearErrorSlider.sliderReleased.connect(lambda:self._param_changed_cb(_param_changed_source.LinearErrorChanged))
-        self.DefectMinAreaSlider.sliderReleased.connect(lambda:self._param_changed_cb(_param_changed_source.DefectMinAreaChanged))
-        ### SpinBox修改时触发信号
-        self.DepthThresholdSpinBox.valueChanged.connect(lambda:self._param_changed_cb(_param_changed_source.DepthThresholdChanged))
-        self.ClassSimilaritySpinBox.valueChanged.connect(lambda:self._param_changed_cb(_param_changed_source.ClassSimilarityChanged))
-        self.NotGoodSimilaritySpinBox.valueChanged.connect(lambda:self._param_changed_cb(_param_changed_source.NotGoodSimilarityChanged))
-        self.LinearErrorSpinBox.valueChanged.connect(lambda:self._param_changed_cb(_param_changed_source.LinearErrorChanged))
-        self.DefectMinAreaSpinBox.valueChanged.connect(lambda:self._param_changed_cb(_param_changed_source.DefectMinAreaChanged))
-        ### 滑动条滑动时, 将值实时更新到SpinBox
+        ### 创建参数枚举和参数控件的映射
+        self._param_widgets = {
+            _param_changed_source.HMinChagned: [self.HMinSlider, self.HMinSpinBox],
+            _param_changed_source.HMaxChanged: [self.HMaxSlider, self.HMaxSpinBox],
+            _param_changed_source.SMinChanged: [self.SMinSlider, self.SMinSpinBox],
+            _param_changed_source.SMaxChanged: [self.SMaxSlider, self.SMaxSpinBox],
+            _param_changed_source.DepthThresholdChanged: [self.DepthThresholdSlider, self.DepthThresholdSpinBox],
+            _param_changed_source.ClassSimilarityChanged: [self.ClassSimilaritySldider, self.ClassSimilaritySpinBox],
+            _param_changed_source.NotGoodSimilarityChanged: [self.NotGoodSimilaritySlider, self.NotGoodSimilaritySpinBox],
+            _param_changed_source.LinearErrorChanged: [self.LinearErrorSlider, self.LinearErrorSpinBox],
+            _param_changed_source.DefectMinAreaChanged: [self.DefectMinAreaSlider, self.DefectMinAreaSpinBox],
+        }
+        self._connect_param_widgets_signal(self._param_widgets)
+
+        ### 滑动条滑动时, 将值实时更新到SpinBox, TODO: 并入self._connect_param_widgets_signal
+        self.HMinSlider.valueChanged.connect(lambda:self.HMinSpinBox.setValue(self.HMinSlider.value()))
+        self.HMaxSlider.valueChanged.connect(lambda:self.HMaxSpinBox.setValue(self.HMaxSlider.value()))
+        self.SMinSlider.valueChanged.connect(lambda:self.SMinSpinBox.setValue(self.SMinSlider.value()))
+        self.SMaxSlider.valueChanged.connect(lambda:self.SMinSpinBox.setValue(self.SMaxSlider.value()))
         self.DepthThresholdSlider.valueChanged.connect(lambda:self.DepthThresholdSpinBox.setValue(self.DepthThresholdSlider.value()))
         self.ClassSimilaritySldider.valueChanged.connect(lambda:self.ClassSimilaritySpinBox.setValue(self.ClassSimilaritySldider.value()))
         self.NotGoodSimilaritySlider.valueChanged.connect(lambda:self.NotGoodSimilaritySpinBox.setValue(self.NotGoodSimilaritySlider.value()))
         self.LinearErrorSlider.valueChanged.connect(lambda:self.LinearErrorSpinBox.setValue(self.LinearErrorSlider.value()))
         self.DefectMinAreaSlider.valueChanged.connect(lambda:self.DefectMinAreaSpinBox.setValue(self.DefectMinAreaSlider.value()))
+        
 
+        #self.DepthThresholdSlider.valueChanged.connect(lambda:self.DepthThresholdSpinBox.setValue(self.DepthThresholdSlider.value()))
 
         self._update_graphic_signal.connect(self._update_graphic_view, type=Qt.ConnectionType.BlockingQueuedConnection)
         self._set_graphic_detail_signal.connect(self._set_graphic_detail_content, type=Qt.ConnectionType.BlockingQueuedConnection)
         
         self._make_msg_box_signal.connect(self._make_msg_box)
     
+
+    def _call_test(self, spinbox):
+        print("call, spin: " + str(spinbox.value()))
+
+
+    def _connect_param_widgets_signal(self, param_widget_map:dict):
+        # 将Slider释放信号和SpinBox修改的信号连接到 `_param_changed_cb`
+        for param_enum in param_widget_map:
+            slider = param_widget_map[param_enum][0]
+            spin_box = param_widget_map[param_enum][1]
+            # 将Slider释放信号连接到 `_param_changed_cb`
+            slider.sliderReleased.connect(partial(self._param_changed_cb, param_enum))
+            # 将SpinBox修改的信号连接到 `_param_changed_cb`
+            spin_box.valueChanged.connect(partial(self._param_changed_cb, param_enum))
+            # 当Slider滑动时, 将值实时更新到对应的SpinBox
+            ## TODO
+
+
 
     """
     @brief: 按钮的槽函数, 回调事件转发器
@@ -150,71 +195,38 @@ class Ui_Main(UI.Ui_LabelChecker, QWidget):
     @brief: 参数区变化的槽函数
     """
     def _param_changed_cb(self, source:_param_changed_source):
-        changed = False
-        # 当Python大于等于3.10时可以尝试使用 match .. case ..
-        if(source == _param_changed_source.DepthThresholdChanged):
-            # 过滤掉由于Slider改变导致的SpinBox改变引发的信号
-            if(
-                (QApplication.focusWidget() == self.DepthThresholdSpinBox) or
-                (not self.DepthThresholdSlider.isSliderDown())
-            ):
-                # 如果是SpinBox的更改, 则需要同步到Slider
-                if(QApplication.focusWidget() == self.DepthThresholdSpinBox):
-                    self.DepthThresholdSlider.setValue(self.DepthThresholdSpinBox.value())
-                # 更新数值到params
-                self._param.depth_threshold = self.DepthThresholdSlider.value()
-                logging.debug("sllider: %d"%(self.DepthThresholdSlider.value()))
-                changed = True
-        elif(source == _param_changed_source.ClassSimilarityChanged):
-            if(
-                (QApplication.focusWidget() == self.ClassSimilaritySpinBox) or
-                (not self.ClassSimilaritySldider.isSliderDown())
-            ):
-                # 如果是SpinBox的更改, 则需要同步到Slider
-                if(QApplication.focusWidget() == self.ClassSimilaritySpinBox):
-                    self.ClassSimilaritySldider.setValue(self.ClassSimilaritySpinBox.value())
-                # 更新数值到params
-                self._param.class_similarity = self.ClassSimilaritySldider.value()
-                logging.debug("sllider: %d"%(self.ClassSimilaritySldider.value()))
-                changed = True
-        elif(source == _param_changed_source.NotGoodSimilarityChanged):
-            if(
-                (QApplication.focusWidget() == self.NotGoodSimilaritySpinBox) or
-                (not self.NotGoodSimilaritySlider.isSliderDown())
-            ):
-                # 如果是SpinBox的更改, 则需要同步到Slider
-                if(QApplication.focusWidget() == self.NotGoodSimilaritySpinBox):
-                    self.NotGoodSimilaritySlider.setValue(self.NotGoodSimilaritySpinBox.value())
-                # 更新数值到params
-                self._param.not_good_similarity = self.NotGoodSimilaritySlider.value()
-                logging.debug("sllider: %d"%(self.NotGoodSimilaritySlider.value())) 
-                changed = True
-        elif(source == _param_changed_source.LinearErrorChanged):
-            if(
-                (QApplication.focusWidget() == self.LinearErrorSpinBox) or
-                (not self.LinearErrorSlider.isSliderDown())
-            ):
-                # 如果是SpinBox的更改, 则需要同步到Slider
-                if(QApplication.focusWidget() == self.LinearErrorSpinBox):
-                    self.LinearErrorSlider.setValue(self.LinearErrorSpinBox.value())
-                # 更新数值到params
-                self._param.linear_error = self.LinearErrorSlider.value()
-                logging.debug("sllider: %d"%(self.LinearErrorSlider.value())) 
-                changed = True
-        else:
-            if(
-                (QApplication.focusWidget() == self.DefectMinAreaSpinBox) or
-                (not self.DepthThresholdSlider.isSliderDown())
-            ):
-                # 如果是SpinBox的更改, 则需要同步到Slider
-                if(QApplication.focusWidget() == self.DefectMinAreaSpinBox):
-                    self.DepthThresholdSlider.setValue(self.DefectMinAreaSpinBox.value())
-                # 更新数值到params
-                self._param.defect_min_area = self.DepthThresholdSlider.value()
-                logging.debug("sllider: %d"%(self.DepthThresholdSlider.value()))
-                changed = True
+        # 获取事件对应的Slider和SpinBox
+        slider = self._param_widgets[source][0]
+        spin_box = self._param_widgets[source][1]
 
-        if(changed):
+        # 过滤掉由于Slider改变导致的SpinBox改变引发的信号
+        if(
+            (QApplication.focusWidget() == spin_box) or
+            (not slider.isSliderDown())
+        ):
+            # 如果是SpinBox的更改, 则需要同步到Slider
+            if(QApplication.focusWidget() == spin_box):
+                slider.setValue(spin_box.value())
+            # 更新数值到params
+            match source:
+                case _param_changed_source.HMinChagned:
+                    self._param.h_min = slider.value()
+                case _param_changed_source.HMaxChanged:
+                    self._param.h_max = slider.value()
+                case _param_changed_source.SMinChanged:
+                    self._param.s_min = slider.value()
+                case _param_changed_source.SMaxChanged:
+                    self._param.s_max = slider.value()
+                case _param_changed_source.DepthThresholdChanged:
+                    self._param.depth_threshold = slider.value()
+                case _param_changed_source.ClassSimilarityChanged:
+                    self._param.class_similarity = slider.value()
+                case _param_changed_source.NotGoodSimilarityChanged:
+                    self._param.not_good_similarity = slider.value()
+                case _param_changed_source.LinearErrorChanged:
+                    self._param.linear_error = slider.value()
+                case _param_changed_source.DefectMinAreaChanged:
+                    self._param.defect_min_area = slider.value()
             self._param_callback(self._param)
 
 

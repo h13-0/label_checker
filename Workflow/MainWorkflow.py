@@ -120,9 +120,21 @@ class MainWorkingFlow():
                 template_partten
             ]
     """
-    def _process_template(self, template_img, threshold:int) -> list:
+    def _process_template(self, 
+            template_img, threshold:int, 
+            h_min:int, h_max:int, s_min:int, s_max:int, v_min:int, v_max:int
+        ) -> list:
         # 1. 先找到标准标签的区域
-        min_rect = self._checker.find_label(template_img, show_soble=False, show_dilate=False)
+        min_rect = self._checker.find_label(
+            img=template_img, 
+            h_min=h_min,
+            h_max=h_max, 
+            s_min=s_min, 
+            s_max=s_max, 
+            v_min=v_min, 
+            v_max=v_max,
+            show_mask = False
+        )
 
         # 2. 将模板标签仿射回标准视角
         temp_wraped = self._checker.wrap_min_aera_rect(template_img, min_rect)
@@ -147,13 +159,22 @@ class MainWorkingFlow():
         - 返回值为由minAreaRect组成的list
     """
     def _find_labels(self, 
-        img, template_w:int, template_h:int, wh_tol_ratio:float = 0.1
+        img, template_w:int, template_h:int,
+        h_min:int, h_max:int, s_min:int, s_max:int, v_min:int, v_max:int,
+        wh_tol_ratio:float = 0.1
     ) -> list:
         rects = self._checker.find_labels(
             img=img,
             template_w=template_w,
             template_h=template_h,
-            wh_tol_ratio=wh_tol_ratio
+            h_min=h_min,
+            h_max=h_max,
+            s_min=s_min,
+            s_max=s_max,
+            v_min=v_min,
+            v_max=v_max,
+            wh_tol_ratio=wh_tol_ratio,
+            show_mask=False
         )
         
         logging.info("total %d labels find", len(rects))
@@ -272,7 +293,13 @@ class MainWorkingFlow():
                         template_img = self._img_dict["模板原始图像"].copy()
                         self._img_dict["模板图像"], self._img_dict["模板样式"] = self._process_template(
                             template_img=template_img,
-                            threshold=params.depth_threshold
+                            threshold=params.depth_threshold,
+                            h_min=params.h_min,
+                            h_max=params.h_max,
+                            s_min=params.s_min,
+                            s_max=params.s_max,
+                            v_min=0,
+                            v_max=255
                         )
                         template_wraped = self._img_dict["模板图像"]
                         template_pattern = self._checker.get_pattern(template_wraped, params.depth_threshold)
@@ -299,7 +326,14 @@ class MainWorkingFlow():
                 rects = self._find_labels(
                     target_img,
                     template_w=template_w,
-                    template_h=template_h
+                    template_h=template_h,
+                    h_min=params.h_min,
+                    h_max=params.h_max,
+                    s_min=params.s_min,
+                    s_max=params.s_max,
+                    v_min=0,
+                    v_max=255,
+                    wh_tol_ratio=0.1
                 )
 
                 # 匹配并绘制标签
@@ -369,7 +403,8 @@ class MainWorkingFlow():
                     logging.info("main workflow exit.")
             
             # Sleep 0.02s
-            time.sleep(0.02)
+            cv2.waitKey(2)
+            #time.sleep(0.02)
         logging.info("main workflow exit.")
 
 

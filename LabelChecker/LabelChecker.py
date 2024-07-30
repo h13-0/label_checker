@@ -13,18 +13,18 @@ class LabelChecker():
     @note: 输入图像应当仅包含一个标签
     @return: minAreaRect
     '''
-    def find_label(self, img, ed_kernel_size = 3, ed_iterations = 3, show_soble = False, show_dilate = False):
-        # 提取标准模板所在色块
-        img_gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-        img_soble_x = cv2.Sobel(img_gray, cv2.CV_8U, 1, 0, ksize = 3)
-        img_soble_y = cv2.Sobel(img_gray, cv2.CV_8U, 0, 1, ksize = 3)
-        img_soble = cv2.addWeighted(img_soble_x, 0.5, img_soble_y, 0.5, 0)
-        erode_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (ed_kernel_size, ed_kernel_size))
-        img_aera_erode = cv2.erode(img_soble, erode_kernel, ed_iterations)
-        img_dilate = cv2.dilate(img_aera_erode, erode_kernel, ed_iterations)
+    def find_label(self, 
+        img, h_min:int, h_max:int, s_min:int, s_max:int, v_min:int, v_max:int,
+        show_mask:bool = False
+    ):
+        # 使用HSV提取标签所在色块
+        hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV_FULL)
+        mask = cv2.inRange(hsv, np.array([h_min, s_min, v_min]), np.array([h_max, s_max, v_max]))
+        if(show_mask):
+            cv2.imshow("@find_label:mask", mask)
 
         # 寻找最大区域
-        contours, hierarchy = cv2.findContours(img_dilate, mode=cv2.RETR_TREE, method=cv2.CHAIN_APPROX_NONE)
+        contours, hierarchy = cv2.findContours(mask, mode=cv2.RETR_TREE, method=cv2.CHAIN_APPROX_NONE)
         max_size = -1
         max_area_rect = None
         for c in contours:
@@ -34,11 +34,6 @@ class LabelChecker():
                 max_size = size
                 max_area_rect = minRect
 
-        # 绘制中间结果
-        if(show_soble):
-            cv2.imshow("img_soble", img_soble)
-        if(show_dilate):
-            cv2.imshow("img_dilate", img_dilate)
         return max_area_rect
 
 
@@ -54,20 +49,18 @@ class LabelChecker():
     @return: minAreaRect
     '''
     def find_labels(self, 
-        img, template_w:int, template_h:int, wh_tol_ratio:float = 0.1,
-        ed_kernel_size = 3, ed_iterations = 3, show_soble = False, show_dilate = False
+        img, template_w:int, template_h:int,
+        h_min:int, h_max:int, s_min:int, s_max:int, v_min:int, v_max:int,
+        wh_tol_ratio:float = 0.1, show_mask:bool = False
     ):
-        # 提取标准模板所在色块
-        img_gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-        img_soble_x = cv2.Sobel(img_gray, cv2.CV_8U, 1, 0, ksize = 3)
-        img_soble_y = cv2.Sobel(img_gray, cv2.CV_8U, 0, 1, ksize = 3)
-        img_soble = cv2.addWeighted(img_soble_x, 0.5, img_soble_y, 0.5, 0)
-        erode_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (ed_kernel_size, ed_kernel_size))
-        img_aera_erode = cv2.erode(img_soble, erode_kernel, ed_iterations)
-        img_dilate = cv2.dilate(img_aera_erode, erode_kernel, ed_iterations)
+        # 使用HSV提取标签所在色块
+        hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV_FULL)
+        mask = cv2.inRange(hsv, np.array([h_min, s_min, v_min]), np.array([h_max, s_max, v_max]))
+        if(show_mask):
+            cv2.imshow("@find_label:mask", mask)
 
-        # 寻找最大区域
-        contours, hierarchy = cv2.findContours(img_dilate, mode=cv2.RETR_TREE, method=cv2.CHAIN_APPROX_NONE)
+        # 寻找标签所在区域
+        contours, hierarchy = cv2.findContours(mask, mode=cv2.RETR_TREE, method=cv2.CHAIN_APPROX_NONE)
         rects = []
         for c in contours:
             minRect  = cv2.minAreaRect(c)

@@ -7,7 +7,7 @@
     <x>0</x>
     <y>0</y>
     <width>1080</width>
-    <height>746</height>
+    <height>780</height>
    </rect>
   </property>
   <property name="minimumSize">
@@ -228,6 +228,19 @@
        </widget>
       </item>
       <item>
+       <spacer name="verticalSpacer_2">
+        <property name="orientation">
+         <enum>Qt::Orientation::Vertical</enum>
+        </property>
+        <property name="sizeHint" stdset="0">
+         <size>
+          <width>20</width>
+          <height>40</height>
+         </size>
+        </property>
+       </spacer>
+      </item>
+      <item>
        <widget class="QLabel" name="label_4">
         <property name="text">
          <string>参数调整区：</string>
@@ -244,6 +257,12 @@
         </property>
         <item>
          <layout class="QHBoxLayout" name="horizontalLayout_2">
+          <property name="topMargin">
+           <number>2</number>
+          </property>
+          <property name="bottomMargin">
+           <number>2</number>
+          </property>
           <item>
            <widget class="QLineEdit" name="lineEdit_4">
             <property name="enabled">
@@ -282,6 +301,172 @@
             </property>
             <property name="text">
              <string>加载参数文件</string>
+            </property>
+           </widget>
+          </item>
+         </layout>
+        </item>
+        <item>
+         <widget class="QLabel" name="label_11">
+          <property name="text">
+           <string>标签色块识别色相下限：</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <layout class="QHBoxLayout" name="horizontalLayout_9">
+          <property name="topMargin">
+           <number>0</number>
+          </property>
+          <item>
+           <widget class="QSlider" name="HMinSlider">
+            <property name="maximum">
+             <number>255</number>
+            </property>
+            <property name="orientation">
+             <enum>Qt::Orientation::Horizontal</enum>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QSpinBox" name="HMinSpinBox">
+            <property name="minimumSize">
+             <size>
+              <width>85</width>
+              <height>30</height>
+             </size>
+            </property>
+            <property name="maximum">
+             <number>255</number>
+            </property>
+           </widget>
+          </item>
+         </layout>
+        </item>
+        <item>
+         <widget class="QLabel" name="label_12">
+          <property name="text">
+           <string>标签色块识别色相上限：</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <layout class="QHBoxLayout" name="horizontalLayout_10">
+          <property name="topMargin">
+           <number>0</number>
+          </property>
+          <item>
+           <widget class="QSlider" name="HMaxSlider">
+            <property name="maximum">
+             <number>255</number>
+            </property>
+            <property name="value">
+             <number>170</number>
+            </property>
+            <property name="orientation">
+             <enum>Qt::Orientation::Horizontal</enum>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QSpinBox" name="HMaxSpinBox">
+            <property name="minimumSize">
+             <size>
+              <width>85</width>
+              <height>30</height>
+             </size>
+            </property>
+            <property name="maximum">
+             <number>255</number>
+            </property>
+            <property name="value">
+             <number>170</number>
+            </property>
+           </widget>
+          </item>
+         </layout>
+        </item>
+        <item>
+         <widget class="QLabel" name="label_13">
+          <property name="text">
+           <string>标签色块识别饱和度下限：</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <layout class="QHBoxLayout" name="horizontalLayout_11">
+          <property name="topMargin">
+           <number>0</number>
+          </property>
+          <item>
+           <widget class="QSlider" name="SMinSlider">
+            <property name="maximum">
+             <number>255</number>
+            </property>
+            <property name="value">
+             <number>13</number>
+            </property>
+            <property name="orientation">
+             <enum>Qt::Orientation::Horizontal</enum>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QSpinBox" name="SMinSpinBox">
+            <property name="minimumSize">
+             <size>
+              <width>85</width>
+              <height>30</height>
+             </size>
+            </property>
+            <property name="maximum">
+             <number>255</number>
+            </property>
+            <property name="value">
+             <number>13</number>
+            </property>
+           </widget>
+          </item>
+         </layout>
+        </item>
+        <item>
+         <widget class="QLabel" name="label_14">
+          <property name="text">
+           <string>标签色块识别饱和度上限：</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <layout class="QHBoxLayout" name="horizontalLayout_12">
+          <property name="topMargin">
+           <number>0</number>
+          </property>
+          <item>
+           <widget class="QSlider" name="SMaxSlider">
+            <property name="maximum">
+             <number>255</number>
+            </property>
+            <property name="value">
+             <number>255</number>
+            </property>
+            <property name="orientation">
+             <enum>Qt::Orientation::Horizontal</enum>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QSpinBox" name="SMaxSpinBox">
+            <property name="minimumSize">
+             <size>
+              <width>85</width>
+              <height>30</height>
+             </size>
+            </property>
+            <property name="maximum">
+             <number>255</number>
+            </property>
+            <property name="value">
+             <number>255</number>
             </property>
            </widget>
           </item>
@@ -476,17 +661,44 @@
          </layout>
         </item>
         <item>
-         <spacer name="verticalSpacer">
-          <property name="orientation">
-           <enum>Qt::Orientation::Vertical</enum>
+         <widget class="QLabel" name="label_10">
+          <property name="text">
+           <string>并行线程数:</string>
           </property>
-          <property name="sizeHint" stdset="0">
-           <size>
-            <width>20</width>
-            <height>40</height>
-           </size>
+         </widget>
+        </item>
+        <item>
+         <layout class="QHBoxLayout" name="horizontalLayout_8">
+          <property name="topMargin">
+           <number>0</number>
           </property>
-         </spacer>
+          <item>
+           <widget class="QSlider" name="horizontalSlider">
+            <property name="enabled">
+             <bool>false</bool>
+            </property>
+            <property name="orientation">
+             <enum>Qt::Orientation::Horizontal</enum>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QSpinBox" name="spinBox">
+            <property name="enabled">
+             <bool>false</bool>
+            </property>
+            <property name="minimumSize">
+             <size>
+              <width>85</width>
+              <height>30</height>
+             </size>
+            </property>
+            <property name="value">
+             <number>1</number>
+            </property>
+           </widget>
+          </item>
+         </layout>
         </item>
        </layout>
       </item>
