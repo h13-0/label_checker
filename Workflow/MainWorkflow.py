@@ -75,9 +75,12 @@ class MainWorkingFlow():
             with self._template_lock:
                 try:
                     self._img_dict["模板原始图像"] = cv2.imread(template_file)
-                    self._template_id += 1
-                    with self._input_changed_lock:
-                        self._input_changed = True
+                    if(self._img_dict["模板原始图像"] is not None):
+                        self._template_id += 1
+                        with self._input_changed_lock:
+                            self._input_changed = True
+                    else:
+                        self._ui.make_msg_box("错误", "文件或文件路径错误, 请检查该文件是否为图片或路径是否不包含中文")
                 except Exception as e:
                     logging.error(e)
 
@@ -91,9 +94,12 @@ class MainWorkingFlow():
             with self._target_lock:
                 try:
                     self._img_dict["待检图像"] = cv2.imread(target_img_file)
-                    self._target_id += 1
-                    with self._input_changed_lock:
-                        self._input_changed = True
+                    if(self._img_dict["待检图像"] is not None):
+                        self._target_id += 1
+                        with self._input_changed_lock:
+                            self._input_changed = True
+                    else:
+                        self._ui.make_msg_box("错误", "文件或文件路径错误, 请检查该文件是否为图片或路径是否不包含中文")
                 except Exception as e:
                     logging.error(e)
 
@@ -354,7 +360,7 @@ class MainWorkingFlow():
                     # 计算误差
                     loss = cv2.countNonZero(diff)
                     ## 判断阈值
-                    similarity = abs(template_pattern_size - loss)/float(template_pattern_size)
+                    similarity = (template_pattern_size - loss)/float(template_pattern_size)
                     logging.info("label: %d, final_loss: %d, similarity: %f"%(id, loss, similarity))
                     ## 绘制方框
                     if(similarity * 100 < params.class_similarity):
@@ -407,8 +413,8 @@ class MainWorkingFlow():
                     logging.info("main workflow exit.")
             
             # Sleep 0.02s
-            cv2.waitKey(2)
-            #time.sleep(0.02)
+            # cv2.waitKey(2)
+            time.sleep(0.02)
         logging.info("main workflow exit.")
 
 

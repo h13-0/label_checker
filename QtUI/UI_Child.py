@@ -118,7 +118,6 @@ class Ui_Main(UI.Ui_LabelChecker, QWidget):
             event.type() == QEvent.Type.KeyRelease
         ):
             self._ctrl_pressed = False
-        pass
 
 
     def setupUi(self, MainWindow):
@@ -129,7 +128,6 @@ class Ui_Main(UI.Ui_LabelChecker, QWidget):
         self.GraphicDetialListvLayout = QVBoxLayout(self.GraphicDetialListContents)
         self.GraphicDetialListContents.setLayout(self.GraphicDetialListvLayout)
         self.GraphicDetialList.setWidget(self.GraphicDetialListContents)
-        print(self.GraphicDetialList)
 
         # 常驻GraphicView的控件及其scene
         self._graphic_widgets = {
@@ -144,6 +142,7 @@ class Ui_Main(UI.Ui_LabelChecker, QWidget):
             self._graphic_widgets[widgets].setScene(
                 self._graphic_widgets_scenes[widgets]
             )
+            self._graphic_widgets[widgets].setDragMode(QtWidgets.QGraphicsView.DragMode.ScrollHandDrag)
 
         # "图像详情列表"的GroupBox、GraphicView及GraphicsScene
         self._graphic_details_group_box_list = []
@@ -198,8 +197,8 @@ class Ui_Main(UI.Ui_LabelChecker, QWidget):
         self._ctrl_pressed = False
         self.MainGraphicView.keyPressEvent = MethodType(self._keyboard_event, self.MainGraphicView)
         self.TemplateGraphicView.keyPressEvent = MethodType(self._keyboard_event, self.TemplateGraphicView)
-        self.MainGraphicView.KeyReleaseEvent = MethodType(self._keyboard_event, self.MainGraphicView)
-        self.TemplateGraphicView.KeyReleaseEvent = MethodType(self._keyboard_event, self.TemplateGraphicView)
+        self.MainGraphicView.keyReleaseEvent = MethodType(self._keyboard_event, self.MainGraphicView)
+        self.TemplateGraphicView.keyReleaseEvent = MethodType(self._keyboard_event, self.TemplateGraphicView)
 
 
     def _connect_param_widgets_signal(self, param_widget_map:dict):
@@ -326,7 +325,8 @@ class Ui_Main(UI.Ui_LabelChecker, QWidget):
             graphic_view.setScene(scene)
             graphic_view.wheelEvent = MethodType(self._wheel_event, graphic_view)
             graphic_view.keyPressEvent = MethodType(self._keyboard_event, graphic_view)
-            graphic_view.keyPressEvent = MethodType(self._keyboard_event, graphic_view)
+            graphic_view.keyReleaseEvent = MethodType(self._keyboard_event, graphic_view)
+            graphic_view.setDragMode(QtWidgets.QGraphicsView.DragMode.ScrollHandDrag)
             self._graphic_details_graphic_view_list.append(graphic_view)
         
             pixmap = QPixmap.fromImage(img)
