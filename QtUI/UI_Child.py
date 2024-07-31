@@ -86,8 +86,10 @@ class Ui_Main(UI.Ui_LabelChecker, QWidget):
         # 默认参数
         self._param = WorkingParams()
 
+
     def _wheel_event(self, widget, event):
-        if(self._ctrl_pressed):
+        #if(self._ctrl_pressed):
+        if(True):
             delta = event.angleDelta().y()
             scale = 1 + delta / 1000.0
 

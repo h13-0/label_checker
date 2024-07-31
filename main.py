@@ -4,9 +4,11 @@ from PyQt6.QtWidgets import QApplication, QMainWindow
 # import UI
 from QtUI.UI_Child import Ui_Main
 
+import os
 import sys
 import threading
 import logging
+import datetime
 
 from Workflow.MainWorkflow import MainWorkingFlow
 
@@ -15,8 +17,17 @@ if __name__ == '__main__':
     # 初始化退出信号
     stop_event = threading.Event()
 
+    # 创建日志输出目录
+    if not os.path.exists("log"):
+        os.mkdir("log")
+
     # 设置日志等级
-    logging.basicConfig(level=logging.DEBUG)
+    logging.basicConfig(
+        format='%(asctime)s - %(filename)s[line:%(lineno)d] - %(levelname)s: %(message)s',
+        level=logging.INFO,
+        filename="log/"+datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S") + ".log",
+        filemode="a"
+    )
 
     # 初始化UI
     app = QApplication(sys.argv)

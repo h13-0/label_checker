@@ -401,7 +401,9 @@ class MainWorkingFlow():
                                 )
                             logging.debug("label: %d, defect size: %d"%(id, w * h))
                         # show
+                        #diff_bgr = cv2.cvtColor(diff, cv2.COLOR_GRAY2BGR)
                         target_result["id: " + str(id)] = target_trans
+                        #target_result["id: " + str(id) + " diff"] = diff_bgr
 
                     id += 1
                 
