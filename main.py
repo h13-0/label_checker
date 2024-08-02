@@ -2,7 +2,7 @@
 from PyQt6.QtWidgets import QApplication, QMainWindow
 
 # import UI
-from QtUI.UI_Child import Ui_Main
+from QtUI.LabelCheckerUI import LabelCheckerUI
 
 import os
 import sys
@@ -32,7 +32,7 @@ if __name__ == '__main__':
     # 初始化UI
     app = QApplication(sys.argv)
     mainWindow = QMainWindow()
-    ui = Ui_Main()
+    ui = LabelCheckerUI()
     ui.setupUi(mainWindow)
     mainWindow.show()
 

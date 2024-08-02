@@ -1,7 +1,8 @@
-from QtUI import UI
+from QtUI.Ui_LabelChecker import Ui_LabelChecker
+from QtUI.TemplateEditorUI import TemplateEditorUI
 from PyQt6 import QtCore, QtWidgets
 from PyQt6.QtCore import pyqtSignal, Qt, QEvent
-from PyQt6.QtWidgets import QWidget, QGraphicsScene, QGraphicsPixmapItem, QVBoxLayout, QMessageBox, QApplication
+from PyQt6.QtWidgets import QWidget, QGraphicsScene, QGraphicsPixmapItem, QVBoxLayout, QMessageBox, QApplication, QMainWindow
 from PyQt6.QtGui import QPixmap, QImage
 import logging
 from enum import Enum
@@ -70,21 +71,26 @@ class _param_changed_source(Enum):
     DefectMinAreaChanged = 9
 
 
-class Ui_Main(UI.Ui_LabelChecker, QWidget):
+class LabelCheckerUI(Ui_LabelChecker, QWidget):
     # 定义Qt信号
     _update_graphic_signal = pyqtSignal(QImage, GraphicWidgets)
     _set_graphic_detail_signal = pyqtSignal(dict)
     _make_msg_box_signal = pyqtSignal(str, str)
 
     def __init__(self):
-        UI.Ui_LabelChecker.__init__(self)
+        Ui_LabelChecker.__init__(self)
         QWidget.__init__(self)
+
+        # 初始化子窗口变量
+        self._template_editor_window = QMainWindow()
+        self._template_editor = TemplateEditorUI()
 
         self._btn_callback_map = {}
         self._param_callback = lambda: logging.warning("params_changed_callback not set.")
 
         # 默认参数
         self._param = WorkingParams()
+
 
 
     def _wheel_event(self, widget, event):
@@ -152,20 +158,17 @@ class Ui_Main(UI.Ui_LabelChecker, QWidget):
         self._graphic_details_graphic_scene_list = []
 
         # 连接回调函数
+        ## UI内部按钮点击事件
+        self.EditTemplateButton.clicked.connect(lambda:self._launch_template_editor())
+
+
         ## 按钮点击事件
-        self.OpenTemplateButton.clicked.connect(lambda:self._btn_callbacks(ButtonCallbackType.OpenTemplateClicked))
         self.OpenTargetStreamButton.clicked.connect(lambda:self._btn_callbacks(ButtonCallbackType.OpenTargetStreamClicked))
         self.OpenTargetPhotoButton.clicked.connect(lambda:self._btn_callbacks(ButtonCallbackType.OpenTargetPhotoClicked))
-        self.LoadParamsButton.clicked.connect(lambda:self._btn_callbacks(ButtonCallbackType.LoadParamsClicked))
 
         ## 参数区回调函数
         ### 创建参数枚举和参数控件的映射
         self._param_widgets = {
-            _param_changed_source.HMinChagned: [self.HMinSlider, self.HMinSpinBox],
-            _param_changed_source.HMaxChanged: [self.HMaxSlider, self.HMaxSpinBox],
-            _param_changed_source.SMinChanged: [self.SMinSlider, self.SMinSpinBox],
-            _param_changed_source.SMaxChanged: [self.SMaxSlider, self.SMaxSpinBox],
-            _param_changed_source.DepthThresholdChanged: [self.DepthThresholdSlider, self.DepthThresholdSpinBox],
             _param_changed_source.ClassSimilarityChanged: [self.ClassSimilaritySldider, self.ClassSimilaritySpinBox],
             _param_changed_source.NotGoodSimilarityChanged: [self.NotGoodSimilaritySlider, self.NotGoodSimilaritySpinBox],
             _param_changed_source.LinearErrorChanged: [self.LinearErrorSlider, self.LinearErrorSpinBox],
@@ -174,11 +177,6 @@ class Ui_Main(UI.Ui_LabelChecker, QWidget):
         self._connect_param_widgets_signal(self._param_widgets)
 
         ### 滑动条滑动时, 将值实时更新到SpinBox, TODO: 并入self._connect_param_widgets_signal
-        self.HMinSlider.valueChanged.connect(lambda:self.HMinSpinBox.setValue(self.HMinSlider.value()))
-        self.HMaxSlider.valueChanged.connect(lambda:self.HMaxSpinBox.setValue(self.HMaxSlider.value()))
-        self.SMinSlider.valueChanged.connect(lambda:self.SMinSpinBox.setValue(self.SMinSlider.value()))
-        self.SMaxSlider.valueChanged.connect(lambda:self.SMinSpinBox.setValue(self.SMaxSlider.value()))
-        self.DepthThresholdSlider.valueChanged.connect(lambda:self.DepthThresholdSpinBox.setValue(self.DepthThresholdSlider.value()))
         self.ClassSimilaritySldider.valueChanged.connect(lambda:self.ClassSimilaritySpinBox.setValue(self.ClassSimilaritySldider.value()))
         self.NotGoodSimilaritySlider.valueChanged.connect(lambda:self.NotGoodSimilaritySpinBox.setValue(self.NotGoodSimilaritySlider.value()))
         self.LinearErrorSlider.valueChanged.connect(lambda:self.LinearErrorSpinBox.setValue(self.LinearErrorSlider.value()))
@@ -201,6 +199,12 @@ class Ui_Main(UI.Ui_LabelChecker, QWidget):
         self.TemplateGraphicView.keyPressEvent = MethodType(self._keyboard_event, self.TemplateGraphicView)
         self.MainGraphicView.keyReleaseEvent = MethodType(self._keyboard_event, self.MainGraphicView)
         self.TemplateGraphicView.keyReleaseEvent = MethodType(self._keyboard_event, self.TemplateGraphicView)
+
+
+    def _launch_template_editor(self):
+        self._template_editor.setupUi(self._template_editor_window)
+        self._template_editor_window.setWindowModality(QtCore.Qt.WindowModality.WindowModal)
+        self._template_editor_window.show()
 
 
     def _connect_param_widgets_signal(self, param_widget_map:dict):

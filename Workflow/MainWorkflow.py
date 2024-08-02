@@ -7,11 +7,11 @@ import logging
 from PyQt6.QtWidgets import QFileDialog
 
 from LabelChecker.LabelChecker import LabelChecker
-from QtUI.UI_Child import Ui_Main, ButtonCallbackType, GraphicWidgets, WorkingParams
+from QtUI.LabelCheckerUI import LabelCheckerUI, ButtonCallbackType, GraphicWidgets, WorkingParams
 
 
 class MainWorkingFlow():
-    def __init__(self, ui:Ui_Main, stop_event:threading.Event) -> None:
+    def __init__(self, ui:LabelCheckerUI, stop_event:threading.Event) -> None:
         self._checker = LabelChecker()
         self._img_list = {}
         self._ui = ui
