@@ -5,10 +5,11 @@ import numpy as np
 import logging
 
 from PyQt6.QtWidgets import QFileDialog
+from Workflow.TemplateEditor import TemplateEditor
 
 from Template.Template import Template
 from LabelChecker.LabelChecker import LabelChecker
-from QtUI.LabelCheckerUI import LabelCheckerUI, ButtonCallbackType, GraphicWidgets, WorkingParams, ComboBoxChangedCallback
+from QtUI.LabelCheckerUI import LabelCheckerUI, ButtonCallbackType, GraphicWidgets, WorkingParams, ComboBoxChangedCallback, ProgressBarWidgts
 
 
 """
@@ -24,6 +25,9 @@ class MainWorkingFlow():
         # 运行时参数
         self._params = WorkingParams()
         self._params_lock = threading.Lock()
+
+        # 模板编辑器相关变量
+        self._editor = TemplateEditor()
 
         # 图像成员变量, 写入dict方便用户debug
         self._img_dict = {}
@@ -50,9 +54,6 @@ class MainWorkingFlow():
         ### _target_lock 用于保持上述两个图像及id的互斥访问
         self._target_lock = threading.Lock()
 
-
-
-
         # "输入变化" 事件的条件变量
         self._input_changed = False
         self._input_changed_lock = threading.Lock()
@@ -63,8 +64,9 @@ class MainWorkingFlow():
     """
     def _init(self):
         # 配置回调函数
-        self._ui.set_cb_changed_callback(ComboBoxChangedCallback.TemplatesChanged, self._template_changed_cb)
+        self._ui.set_btn_callback(ButtonCallbackType.EditTemplateButton, self._create_editor_cb)
         self._ui.set_btn_callback(ButtonCallbackType.OpenTargetPhotoClicked, self._open_target_photo_cb)
+        self._ui.set_cb_changed_callback(ComboBoxChangedCallback.TemplatesChanged, self._template_changed_cb)
         self._ui.set_params_changed_callback(self._working_param_changed_cb)
 
         # 扫描模板列表, TODO
@@ -76,6 +78,15 @@ class MainWorkingFlow():
         for template in self._template_dict:
             self._ui.add_template_option(template)
         
+
+    """
+    @brief: 创建模板编辑器的回调
+    """
+    def _create_editor_cb(self):
+        # 回调函数一定为主线程, 因此可以操作UI
+        self._editor.show()
+        self._editor.run()
+
 
     """
     @brief: 调用文件选择对话框选择文件
@@ -120,6 +131,7 @@ class MainWorkingFlow():
             if(success):
                 with self._input_changed_lock:
                     self._input_changed = True
+
 
 
     """
@@ -269,11 +281,11 @@ class MainWorkingFlow():
         # 5. 微调, TODO: 参数可调
         x, y, angle = self._checker.fine_tune(
             test=pattern, std=template_pattern,
-            max_abs_x=10, max_abs_y=10, max_abs_a=1,
+            max_abs_x=20, max_abs_y=20, max_abs_a=1,
             max_iterations=40, 
             shielded_areas=shielded_areas,
-            angle_step=0.0015, view_size=2,
-            show_process=True
+            angle_step=0.0015, view_size=7,
+            show_process=False
         )
 
         # 6. 获取微调后的样式
@@ -290,7 +302,7 @@ class MainWorkingFlow():
         target_trans = self._checker.linear_trans_to(
             img=target_wraped, x=x, y=y, angle=angle, output_size=[template_pattern.shape[1], template_pattern.shape[0]], border_color=[255, 255, 255]
         )
-        return [ diff, target_trans, pattern ]
+        return [ diff, target_trans, target_pattern ]
 
 
 
@@ -379,6 +391,9 @@ class MainWorkingFlow():
                 if(not isinstance(target_img, np.ndarray)):
                     continue
 
+                ## 重置进度条
+                self._ui.set_progress_bar_value(ProgressBarWidgts.CompareProgressBar, 0)
+
                 ## 开始对待检图像进行图像处理 TODO
                 rects = self._find_labels(
                     target_img,
@@ -398,6 +413,7 @@ class MainWorkingFlow():
                 id = 0
                 ## 存储结果
                 target_result = {}
+                target_num = len(rects)
                 for r in rects:
                     # 匹配标签并获得缺陷图
                     diff, target_trans, pattern = self._match_label( 
@@ -456,9 +472,19 @@ class MainWorkingFlow():
                         target_result["id: " + str(id)] = target_trans
                         diff_bgr = cv2.cvtColor(diff, cv2.COLOR_GRAY2BGR)
                         target_result["id: " + str(id) + " diff"] = diff_bgr
+
+                        # 高精度误差图
+                        target_remain = self._checker.cut_with_tol(template_pattern, pattern, 0, template_shielded_areas)
+                        template_remain = self._checker.cut_with_tol(pattern, template_pattern, 0, template_shielded_areas)
+                        #diff_high_pre = cv2.bitwise_or(target_remain, template_remain)
+                        #diff_high_pre_bgr = cv2.cvtColor(diff_high_pre, cv2.COLOR_GRAY2BGR)
+                        #target_result["id: " + str(id) + " high diff"] = diff_high_pre_bgr
+
                         pattern_bgr = cv2.cvtColor(pattern, cv2.COLOR_GRAY2BGR)
                         target_result["id: " + str(id) + " pattern"] = pattern_bgr
 
+                    # 输出进度到进度条
+                    self._ui.set_progress_bar_value(ProgressBarWidgts.CompareProgressBar, int((id + 1) * 100 / target_num))
                     id += 1
                 
                 # 在操作ui之前确保程序没有被退出

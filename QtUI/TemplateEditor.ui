@@ -72,7 +72,7 @@
        </widget>
       </item>
       <item>
-       <widget class="QGraphicsView" name="graphicsView"/>
+       <widget class="QGraphicsView" name="PatternGraphicsView"/>
       </item>
       <item>
        <spacer name="verticalSpacer">
@@ -145,7 +145,7 @@
          <number>0</number>
         </property>
         <item>
-         <widget class="QPushButton" name="pushButton_6">
+         <widget class="QPushButton" name="OpenTemplatePhoto">
           <property name="minimumSize">
            <size>
             <width>0</width>

@@ -1,5 +1,4 @@
 from QtUI.Ui_LabelChecker import Ui_LabelChecker
-from QtUI.TemplateEditorUI import TemplateEditorUI
 from PyQt6 import QtCore, QtWidgets
 from PyQt6.QtCore import pyqtSignal, Qt, QEvent
 from PyQt6.QtWidgets import QWidget, QGraphicsScene, QGraphicsPixmapItem, QVBoxLayout, QMessageBox, QApplication, QMainWindow
@@ -14,9 +13,10 @@ from types import MethodType
 @brief: 按钮事件回调
 """
 class ButtonCallbackType(Enum):
-    OpenTargetStreamClicked = 1
-    OpenTargetPhotoClicked = 2
-    LoadParamsClicked = 3
+    EditTemplateButton = 1
+    OpenTargetStreamClicked = 2
+    OpenTargetPhotoClicked = 3
+    LoadParamsClicked = 4
 
 
 """
@@ -32,6 +32,13 @@ class ComboBoxChangedCallback(Enum):
 class GraphicWidgets(Enum):
     MainGraphicView = 1
     TemplateGraphicView = 2
+
+
+"""
+@brief: 进度条枚举类
+"""
+class ProgressBarWidgts(Enum):
+    CompareProgressBar = 1
 
 
 """
@@ -51,8 +58,8 @@ class WorkingParams():
     def __init__(self, 
         h_min:int = 0, h_max:int = 170, s_min:int = 13, s_max:int = 255,
         depth_threshold:int = 170, class_similarity:int = 90, 
-        not_good_similarity:int = 95, linear_error:int = 5,
-        defect_min_area:int = 5
+        not_good_similarity:int = 95, linear_error:int = 6,
+        defect_min_area:int = 6
     ) -> None:
         self.h_min = h_min
         self.h_max = h_max
@@ -86,14 +93,12 @@ class LabelCheckerUI(Ui_LabelChecker, QWidget):
     _set_graphic_detail_signal = pyqtSignal(dict)
     _make_msg_box_signal = pyqtSignal(str, str)
     _add_item_to_templates_combo_box_signal = pyqtSignal(str)
+    ## 进度条操作信号
+    _set_progress_bar_value_signal = pyqtSignal(ProgressBarWidgts, int)
 
     def __init__(self):
         Ui_LabelChecker.__init__(self)
         QWidget.__init__(self)
-
-        # 初始化子窗口变量
-        self._template_editor_window = QMainWindow()
-        self._template_editor = TemplateEditorUI()
 
         # 按钮事件回调映射
         self._btn_callback_map = {}
@@ -131,6 +136,11 @@ class LabelCheckerUI(Ui_LabelChecker, QWidget):
     def setupUi(self, MainWindow):
         super().setupUi(MainWindow)
 
+        # 进度条控件映射
+        self._progress_bars = {
+            "CompareProgressBar": self.CopareProgressBar
+        }
+
         # 初始化GraphicDetialList
         self.GraphicDetialListContents = QWidget()
         self.GraphicDetialListvLayout = QVBoxLayout(self.GraphicDetialListContents)
@@ -158,13 +168,11 @@ class LabelCheckerUI(Ui_LabelChecker, QWidget):
         self._graphic_details_graphic_scene_list = []
 
         # 连接回调函数
-        ## UI内部按钮点击事件
-        self.EditTemplateButton.clicked.connect(lambda:self._launch_template_editor())
-
         ## 模板列表(ComboBox)选中事件
         self.TemplatesComboBox.currentIndexChanged.connect(lambda:self._cb_changed_callbacks(ComboBoxChangedCallback.TemplatesChanged))
 
         ## 按钮点击事件
+        self.EditTemplateButton.clicked.connect(lambda:self._btn_callbacks(ButtonCallbackType.EditTemplateButton))
         self.OpenTargetStreamButton.clicked.connect(lambda:self._btn_callbacks(ButtonCallbackType.OpenTargetStreamClicked))
         self.OpenTargetPhotoButton.clicked.connect(lambda:self._btn_callbacks(ButtonCallbackType.OpenTargetPhotoClicked))
 
@@ -196,13 +204,8 @@ class LabelCheckerUI(Ui_LabelChecker, QWidget):
         self._set_graphic_detail_signal.connect(self._set_graphic_detail_content, type=Qt.ConnectionType.BlockingQueuedConnection)
         ### MessageBox
         self._make_msg_box_signal.connect(self._make_msg_box)
-        
-
-
-    def _launch_template_editor(self):
-        self._template_editor.setupUi(self._template_editor_window)
-        self._template_editor_window.setWindowModality(QtCore.Qt.WindowModality.WindowModal)
-        self._template_editor_window.show()
+        ### 进度条
+        self._set_progress_bar_value_signal.connect(self._set_progress_bar_value)
 
 
     def _connect_param_widgets_signal(self, param_widget_map:dict):
@@ -236,6 +239,14 @@ class LabelCheckerUI(Ui_LabelChecker, QWidget):
             logging.warning("Callback: " + target.name + " not set.")
         else:
             self._btn_callback_map[target.name]()
+
+
+    """
+    @brief: 设置进度条进度的槽函数
+    """
+    def _set_progress_bar_value(self, target:ProgressBarWidgts, value:int):
+        self._progress_bars[target.name].setValue(value)
+        logging.debug(value)
 
 
     """
@@ -388,6 +399,16 @@ class LabelCheckerUI(Ui_LabelChecker, QWidget):
     """
     def add_template_option(self, option:str):
         self._add_item_to_templates_combo_box_signal.emit(option)
+
+
+    """
+    @brief: 设置进度条进度
+    @param:
+        - target: ProgressBarWidgts中指定的对象枚举
+        - value: 进度条值, int, 值域[0, 100]
+    """
+    def set_progress_bar_value(self, target:ProgressBarWidgts, value:int):
+        self._set_progress_bar_value_signal.emit(target, value)
 
 
     """
