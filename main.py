@@ -24,9 +24,9 @@ if __name__ == '__main__':
     # 设置日志等级
     logging.basicConfig(
         format='%(asctime)s - %(filename)s[line:%(lineno)d] - %(levelname)s: %(message)s',
-        level=logging.INFO,
-        filename="log/"+datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S") + ".log",
-        filemode="a"
+        level=logging.DEBUG,
+        #filename="log/"+datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S") + ".log",
+        #filemode="a"
     )
 
     # 初始化UI

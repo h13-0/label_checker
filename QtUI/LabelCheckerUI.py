@@ -10,11 +10,20 @@ import cv2
 from functools import partial
 from types import MethodType
 
+"""
+@brief: 按钮事件回调
+"""
 class ButtonCallbackType(Enum):
-    OpenTemplateClicked = 1
-    OpenTargetStreamClicked = 2
-    OpenTargetPhotoClicked = 3
-    LoadParamsClicked = 4
+    OpenTargetStreamClicked = 1
+    OpenTargetPhotoClicked = 2
+    LoadParamsClicked = 3
+
+
+"""
+@brief: ComboBox所选目标改变事件的回调
+"""
+class ComboBoxChangedCallback(Enum):
+    TemplatesChanged = 1
 
 
 """
@@ -76,6 +85,7 @@ class LabelCheckerUI(Ui_LabelChecker, QWidget):
     _update_graphic_signal = pyqtSignal(QImage, GraphicWidgets)
     _set_graphic_detail_signal = pyqtSignal(dict)
     _make_msg_box_signal = pyqtSignal(str, str)
+    _add_item_to_templates_combo_box_signal = pyqtSignal(str)
 
     def __init__(self):
         Ui_LabelChecker.__init__(self)
@@ -85,7 +95,11 @@ class LabelCheckerUI(Ui_LabelChecker, QWidget):
         self._template_editor_window = QMainWindow()
         self._template_editor = TemplateEditorUI()
 
+        # 按钮事件回调映射
         self._btn_callback_map = {}
+        # ComboBox改变回调映射
+        self._cb_changed_callback_map = {}
+        # 参数改变的回调函数
         self._param_callback = lambda: logging.warning("params_changed_callback not set.")
 
         # 默认参数
@@ -94,7 +108,6 @@ class LabelCheckerUI(Ui_LabelChecker, QWidget):
 
 
     def _wheel_event(self, widget, event):
-        #if(self._ctrl_pressed):
         if(True):
             delta = event.angleDelta().y()
             scale = 1 + delta / 1000.0
@@ -113,19 +126,6 @@ class LabelCheckerUI(Ui_LabelChecker, QWidget):
                     self._graphic_details_group_box_list[i].setMinimumWidth(width)
                     self._graphic_details_group_box_list[i].setMaximumHeight(height)
                     self._graphic_details_group_box_list[i].setMinimumHeight(height)
-
-
-    def _keyboard_event(self, widget, event):
-        if(
-            event.key() == 16777249 and #ctrl
-            event.type() == QEvent.Type.KeyPress
-        ):
-            self._ctrl_pressed = True
-        elif(
-            event.key() == 16777249 and #ctrl
-            event.type() == QEvent.Type.KeyRelease
-        ):
-            self._ctrl_pressed = False
 
 
     def setupUi(self, MainWindow):
@@ -161,6 +161,8 @@ class LabelCheckerUI(Ui_LabelChecker, QWidget):
         ## UI内部按钮点击事件
         self.EditTemplateButton.clicked.connect(lambda:self._launch_template_editor())
 
+        ## 模板列表(ComboBox)选中事件
+        self.TemplatesComboBox.currentIndexChanged.connect(lambda:self._cb_changed_callbacks(ComboBoxChangedCallback.TemplatesChanged))
 
         ## 按钮点击事件
         self.OpenTargetStreamButton.clicked.connect(lambda:self._btn_callbacks(ButtonCallbackType.OpenTargetStreamClicked))
@@ -182,23 +184,19 @@ class LabelCheckerUI(Ui_LabelChecker, QWidget):
         self.LinearErrorSlider.valueChanged.connect(lambda:self.LinearErrorSpinBox.setValue(self.LinearErrorSlider.value()))
         self.DefectMinAreaSlider.valueChanged.connect(lambda:self.DefectMinAreaSpinBox.setValue(self.DefectMinAreaSlider.value()))
         
-        ## GraphicView 更新图像
-        self._update_graphic_signal.connect(self._update_graphic_view, type=Qt.ConnectionType.BlockingQueuedConnection)
-        self._set_graphic_detail_signal.connect(self._set_graphic_detail_content, type=Qt.ConnectionType.BlockingQueuedConnection)
-        
         ## GraphicView 鼠标滚动缩放
         self.MainGraphicView.wheelEvent = MethodType(self._wheel_event, self.MainGraphicView)
         self.TemplateGraphicView.wheelEvent = MethodType(self._wheel_event, self.TemplateGraphicView)
 
-        ## MessageBox
+        ## 连接自定义信号
+        ### ComboBox 添加元素
+        self._add_item_to_templates_combo_box_signal.connect(self._add_item_to_templates_combo_box)
+        ### GraphicView 更新图像
+        self._update_graphic_signal.connect(self._update_graphic_view, type=Qt.ConnectionType.BlockingQueuedConnection)
+        self._set_graphic_detail_signal.connect(self._set_graphic_detail_content, type=Qt.ConnectionType.BlockingQueuedConnection)
+        ### MessageBox
         self._make_msg_box_signal.connect(self._make_msg_box)
-
-        ## 键盘按下和松开事件
-        self._ctrl_pressed = False
-        self.MainGraphicView.keyPressEvent = MethodType(self._keyboard_event, self.MainGraphicView)
-        self.TemplateGraphicView.keyPressEvent = MethodType(self._keyboard_event, self.TemplateGraphicView)
-        self.MainGraphicView.keyReleaseEvent = MethodType(self._keyboard_event, self.MainGraphicView)
-        self.TemplateGraphicView.keyReleaseEvent = MethodType(self._keyboard_event, self.TemplateGraphicView)
+        
 
 
     def _launch_template_editor(self):
@@ -219,6 +217,15 @@ class LabelCheckerUI(Ui_LabelChecker, QWidget):
             # 当Slider滑动时, 将值实时更新到对应的SpinBox
             ## TODO
 
+
+    """
+    @brief: ComboBox所选目标改变的回调函数
+    """
+    def _cb_changed_callbacks(self, target:ComboBoxChangedCallback):
+        if(not target.name in self._cb_changed_callback_map):
+            logging.warning("Callback: " + target.name + " not set.")
+        else:
+            self._cb_changed_callback_map[target.name](self.TemplatesComboBox.currentIndex(), self.TemplatesComboBox.currentText())
 
 
     """
@@ -282,6 +289,13 @@ class LabelCheckerUI(Ui_LabelChecker, QWidget):
 
 
     """
+    @brief: 向Templates的ComboBox中添加元素的槽函数
+    """
+    def _add_item_to_templates_combo_box(self, item:str):
+        self.TemplatesComboBox.addItem(item)
+
+
+    """
     @brief: 设置 "图像详情列表" 元素的槽函数
     @param:
         - details:
@@ -330,8 +344,6 @@ class LabelCheckerUI(Ui_LabelChecker, QWidget):
             graphic_view.move(10, 20)
             graphic_view.setScene(scene)
             graphic_view.wheelEvent = MethodType(self._wheel_event, graphic_view)
-            graphic_view.keyPressEvent = MethodType(self._keyboard_event, graphic_view)
-            graphic_view.keyReleaseEvent = MethodType(self._keyboard_event, graphic_view)
             graphic_view.setDragMode(QtWidgets.QGraphicsView.DragMode.ScrollHandDrag)
             self._graphic_details_graphic_view_list.append(graphic_view)
         
@@ -349,9 +361,19 @@ class LabelCheckerUI(Ui_LabelChecker, QWidget):
         QMessageBox.warning(self, title, text)
 
 
+    """
+    @brief: 设置ComboBox选中目标改变的回调函数
+    @param:
+        - callback: 回调函数, 函数原型应为: `func(id:int, current_name:str)`
+    """
+    def set_cb_changed_callback(self, target:ComboBoxChangedCallback, callback):
+        self._cb_changed_callback_map[target.name] = callback
+
 
     """
     @brief: 设置按钮回调函数的接口, 可用于设置 `ButtonCallbackType` 中定义的所有类型回调
+    @param:
+        - callback: 回调函数, 原型应为 func()
     """
     def set_btn_callback(self, target:ButtonCallbackType, callback):
         self._btn_callback_map[target.name] = callback
@@ -359,6 +381,13 @@ class LabelCheckerUI(Ui_LabelChecker, QWidget):
 
     def set_params_changed_callback(self, callback):
         self._param_callback = callback
+
+
+    """
+    @brief: 向模板列表中增加选项
+    """
+    def add_template_option(self, option:str):
+        self._add_item_to_templates_combo_box_signal.emit(option)
 
 
     """

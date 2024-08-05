@@ -6,10 +6,14 @@ import logging
 
 from PyQt6.QtWidgets import QFileDialog
 
+from Template.Template import Template
 from LabelChecker.LabelChecker import LabelChecker
-from QtUI.LabelCheckerUI import LabelCheckerUI, ButtonCallbackType, GraphicWidgets, WorkingParams
+from QtUI.LabelCheckerUI import LabelCheckerUI, ButtonCallbackType, GraphicWidgets, WorkingParams, ComboBoxChangedCallback
 
 
+"""
+@brief: 主工作逻辑
+"""
 class MainWorkingFlow():
     def __init__(self, ui:LabelCheckerUI, stop_event:threading.Event) -> None:
         self._checker = LabelChecker()
@@ -25,12 +29,17 @@ class MainWorkingFlow():
         self._img_dict = {}
 
         ## 模板及其互斥锁
+        ### TODO, 弃用dict
         self._img_dict["模板原始图像"] = None
         self._img_dict["模板图像"] = None
         self._img_dict["模板样式"] = None
+        ### 模板样式屏蔽区域与OCR-条码核对区域
+        ### 模板样式屏蔽区域(包含屏蔽区域和OCR-条码核对区域)
+        self._template_shielded_areas = []
+        self._template_ocr_bar_code_pairs = []
         ### _template_id 用于检测模板是否变化
         self._template_id = 0
-        ### _template_lock 用于保持上述三个图像及id的互斥访问
+        ### _template_lock 用于保持上述若干变量的互斥访问
         self._template_lock = threading.Lock()
 
         ## 待检图像及其互斥锁、条件变量。条件变量用于同步视频流等输入
@@ -40,6 +49,9 @@ class MainWorkingFlow():
         self._target_id = 0
         ### _target_lock 用于保持上述两个图像及id的互斥访问
         self._target_lock = threading.Lock()
+
+
+
 
         # "输入变化" 事件的条件变量
         self._input_changed = False
@@ -51,10 +63,19 @@ class MainWorkingFlow():
     """
     def _init(self):
         # 配置回调函数
-        self._ui.set_btn_callback(ButtonCallbackType.OpenTemplateClicked, self._open_template_cb)
+        self._ui.set_cb_changed_callback(ComboBoxChangedCallback.TemplatesChanged, self._template_changed_cb)
         self._ui.set_btn_callback(ButtonCallbackType.OpenTargetPhotoClicked, self._open_target_photo_cb)
         self._ui.set_params_changed_callback(self._working_param_changed_cb)
 
+        # 扫描模板列表, TODO
+        self._ui.add_template_option("创建新模板")
+        ## TODO
+        self._template_dict = {
+            "600PPI_With_SN": Template.open("../templates/600PPI_With_SN")
+        }
+        for template in self._template_dict:
+            self._ui.add_template_option(template)
+        
 
     """
     @brief: 调用文件选择对话框选择文件
@@ -67,22 +88,38 @@ class MainWorkingFlow():
 
 
     """
-    @brief: "打开模板图像"的回调函数
+    @brief: 当目标模板更改时触发该回调函数
     """
-    def _open_template_cb(self):
-        template_file = self._open_file()
-        if(len(template_file)):
+    def _template_changed_cb(self, id:int, curr_template:str):
+        logging.info("template target changed to: %s, id: %d", curr_template, id)
+        success = False
+        if(id > 0):
+            template = self._template_dict[curr_template]
+            logging.info("template config: " + str(template))
             with self._template_lock:
                 try:
-                    self._img_dict["模板原始图像"] = cv2.imread(template_file)
+                    # 读取图像
+                    self._img_dict["模板原始图像"] = cv2.imread(template.get_img_path())
+                    # 导入屏蔽区域
+                    for area in template.get_shielded_areas():
+                        self._template_shielded_areas.append((
+                            area["x1"], area["y1"], area["x2"], area["y2"]
+                        ))
+                    # 导入OCR-条码核对区
+                    ## TODO
+                    
+                    # 校验结果
                     if(self._img_dict["模板原始图像"] is not None):
                         self._template_id += 1
-                        with self._input_changed_lock:
-                            self._input_changed = True
+                        success = True
                     else:
                         self._ui.make_msg_box("错误", "文件或文件路径错误, 请检查该文件是否为图片或路径是否不包含中文")
                 except Exception as e:
                     logging.error(e)
+
+            if(success):
+                with self._input_changed_lock:
+                    self._input_changed = True
 
 
     """
@@ -90,18 +127,22 @@ class MainWorkingFlow():
     """
     def _open_target_photo_cb(self):
         target_img_file = self._open_file()
+        success = False
         if(len(target_img_file)):
             with self._target_lock:
                 try:
                     self._img_dict["待检图像"] = cv2.imread(target_img_file)
                     if(self._img_dict["待检图像"] is not None):
                         self._target_id += 1
-                        with self._input_changed_lock:
-                            self._input_changed = True
+                        success = True
                     else:
                         self._ui.make_msg_box("错误", "文件或文件路径错误, 请检查该文件是否为图片或路径是否不包含中文")
                 except Exception as e:
                     logging.error(e)
+        
+            if(success):
+                with self._input_changed_lock:
+                    self._input_changed = True
 
 
     """
@@ -187,16 +228,6 @@ class MainWorkingFlow():
         return rects
 
 
-    def _get_pattern(self, wraped_img, threshold:int):
-        # 1. 将图像反色
-        target_wraped_reversed = cv2.bitwise_not(wraped_img)
-
-        # 2. 将标签图像转为二值图
-        target_pattern = cv2.threshold(cv2.cvtColor(target_wraped_reversed, cv2.COLOR_BGR2GRAY), threshold, 255, cv2.THRESH_BINARY)
-
-        return target_pattern
-
-
     """
     @brief: 将target_img图像中指定的target_rect所在的标签与template_pattern进行匹配
     @param:
@@ -213,7 +244,7 @@ class MainWorkingFlow():
         本函数未来会做为并行运算的方法使用
     """
     def _match_label(self, 
-        template_pattern, target_img, target_rect, threshold:int,
+        template_pattern, target_img, target_rect, threshold:int, shielded_areas:list,
         initial_minimum_simi:float = 0.01, thickness_tol:int = 3
     ):
         # 1. 将模板标签仿射回标准视角
@@ -223,7 +254,14 @@ class MainWorkingFlow():
         pattern = self._checker.get_pattern(target_wraped, threshold)
 
         # 3. 监测相似度是否超标
-        loss = self._checker.try_match(pattern, template_pattern, 0, 0, 0)
+        loss = self._checker.try_match(
+            pattern, template_pattern, 
+            x=0, 
+            y=0, 
+            angle=0,
+            shielded_areas=shielded_areas,
+            show_diff=False
+        )
         
         # 4. TODO: 判定初始相似度是否超标
         logging.info("初始误差: " + str(loss))
@@ -232,7 +270,10 @@ class MainWorkingFlow():
         x, y, angle = self._checker.fine_tune(
             test=pattern, std=template_pattern,
             max_abs_x=10, max_abs_y=10, max_abs_a=1,
-            max_iterations=20, angle_step=0.05, view_size=2
+            max_iterations=40, 
+            shielded_areas=shielded_areas,
+            angle_step=0.0015, view_size=2,
+            show_process=True
         )
 
         # 6. 获取微调后的样式
@@ -241,15 +282,15 @@ class MainWorkingFlow():
         )
 
         # 7. 获得误差图像
-        target_remain = self._checker.cut_with_tol(template_pattern, target_pattern, thickness_tol)
-        template_remain = self._checker.cut_with_tol(target_pattern, template_pattern, thickness_tol)
+        target_remain = self._checker.cut_with_tol(template_pattern, target_pattern, thickness_tol, shielded_areas)
+        template_remain = self._checker.cut_with_tol(target_pattern, template_pattern, thickness_tol, shielded_areas)
         diff = cv2.bitwise_or(target_remain, template_remain)
 
         # 8. 计算线性变换后原图
         target_trans = self._checker.linear_trans_to(
             img=target_wraped, x=x, y=y, angle=angle, output_size=[template_pattern.shape[1], template_pattern.shape[0]], border_color=[255, 255, 255]
         )
-        return [ diff, target_trans ]
+        return [ diff, target_trans, pattern ]
 
 
 
@@ -261,6 +302,9 @@ class MainWorkingFlow():
         ## 仿射后的标签
         template_wraped = None
         template_pattern = None
+        ## 样式屏蔽区域及OCR-条码核对区
+        template_shielded_areas = []
+        template_ocr_bar_code_pairs = []
         template_pattern_size = 0
         template_w = 0
         template_h = 0
@@ -306,9 +350,16 @@ class MainWorkingFlow():
                             v_max=255
                         )
                         template_wraped = self._img_dict["模板图像"]
+
+                        template_shielded_areas = self._template_shielded_areas.copy()
+                        template_ocr_bar_code_pairs = self._template_ocr_bar_code_pairs.copy()
+
                         template_pattern = self._checker.get_pattern(template_wraped, params.depth_threshold)
                         template_pattern_size = cv2.countNonZero(template_pattern)
                         logging.debug("@main:template_pattern_size: %d"%(template_pattern_size))
+
+
+
                         template_w = template_wraped.shape[1]
                         template_h = template_wraped.shape[0]
                         # 在UI中更新图像
@@ -349,11 +400,12 @@ class MainWorkingFlow():
                 target_result = {}
                 for r in rects:
                     # 匹配标签并获得缺陷图
-                    diff, target_trans = self._match_label( 
+                    diff, target_trans, pattern = self._match_label( 
                         template_pattern=template_pattern,
                         target_img=target_img,
                         target_rect=r,
                         threshold=params.depth_threshold,
+                        shielded_areas=template_shielded_areas,
                         thickness_tol=params.linear_error
                     )
 
@@ -401,9 +453,11 @@ class MainWorkingFlow():
                                 )
                             logging.debug("label: %d, defect size: %d"%(id, w * h))
                         # show
-                        #diff_bgr = cv2.cvtColor(diff, cv2.COLOR_GRAY2BGR)
                         target_result["id: " + str(id)] = target_trans
-                        #target_result["id: " + str(id) + " diff"] = diff_bgr
+                        diff_bgr = cv2.cvtColor(diff, cv2.COLOR_GRAY2BGR)
+                        target_result["id: " + str(id) + " diff"] = diff_bgr
+                        pattern_bgr = cv2.cvtColor(pattern, cv2.COLOR_GRAY2BGR)
+                        target_result["id: " + str(id) + " pattern"] = pattern_bgr
 
                     id += 1
                 
@@ -415,8 +469,8 @@ class MainWorkingFlow():
                     logging.info("main workflow exit.")
             
             # Sleep 0.02s
-            # cv2.waitKey(2)
-            time.sleep(0.02)
+            cv2.waitKey(2)
+            #time.sleep(0.02)
         logging.info("main workflow exit.")
 
 

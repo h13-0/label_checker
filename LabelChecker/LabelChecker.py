@@ -167,13 +167,39 @@ class LabelChecker():
     @param:
         - wraped_img: 仿射后的图像
         - threshold: 黑度阈值(255: 最黑, 0: 最亮)
+        - shielded_areas: 需要屏蔽的区域, 在这些区域内的样式二值图会被覆盖为黑色(即屏蔽对应区域)。为list类型, 数据结构定义如下: 
+            [
+                (x1, y1, x2, y2),
+                (...)
+            ]
     """
-    def get_pattern(self, wraped_img, threshold:int):
+    def get_pattern(self, wraped_img, threshold:int, shielded_areas:list=None):
         # 1. 将图像反色
         target_wraped_reversed = cv2.bitwise_not(wraped_img)
 
         # 2. 将标签图像转为二值图
         _, target_pattern = cv2.threshold(cv2.cvtColor(target_wraped_reversed, cv2.COLOR_BGR2GRAY), threshold, 255, cv2.THRESH_BINARY)
+
+        # 3. 对选定区域进行屏蔽
+        if(isinstance(shielded_areas, list)):
+            for area in shielded_areas:
+                # 检查输入维度是否合法
+                if(len(area) != 4):
+                    logging.error("Shielded'area setting error, requires [(x1, x2, y1, y2), ...], But get [..., " + str(area) + ", ...]")
+                    continue
+                # 检查坐标点是否合法
+                if(area[2] < area[0] or area[3] < area[1]):
+                    logging.error("invalid shielded_area: " + str(area))
+                    continue
+                # 检查坐标点是否越界
+                if(
+                    area[0] > wraped_img.shape[1] or area[2] > wraped_img.shape[1] or
+                    area[1] > wraped_img.shape[0] or area[3] > wraped_img.shape[0]
+                ):
+                    logging.error("rect point out of bounds: " + str(area))
+                    continue
+                # 执行屏蔽
+                target_pattern = cv2.rectangle(target_pattern, (area[0], area[1]), (area[2], area[3]), 0, thickness=cv2.FILLED)
 
         return target_pattern
 
@@ -216,7 +242,7 @@ class LabelChecker():
         matrix = cv2.getRotationMatrix2D(center=(ext_w / 2, ext_h / 2), angle=angle, scale=1)
         test_rot = cv2.warpAffine(test_ext, matrix, (ext_w, ext_h))
 
-        # 从中心裁切到与输出大小同大，并在裁切时位移
+        # 从中心裁切到与输出大小同大, 并在裁切时位移
         rot_w = test_rot.shape[1]
         rot_h = test_rot.shape[0]
         rot_cen_x = rot_w / 2.
@@ -234,16 +260,24 @@ class LabelChecker():
     '''
     @brief: 将待测图像以指定线性变换匹配到标准图像上, 用于二值图匹配
     @param:
-        - img1
-        - img2
+        - img1: 待变换的图像
+        - img2: 欲匹配的图像
     @return: 未能匹配的像素数量
     '''
-    def try_match(self, img1, img2, x:int, y:int, angle, show_diff = False) -> int:
+    def try_match(self, img1, img2, x:int, y:int, angle, shielded_areas:list=None, show_diff = False) -> int:
+        # 线性变换
         trans = self.linear_trans_to(img1, x, y, angle, [img2.shape[1], img2.shape[0]], 0)
+        # 对选定区域进行屏蔽
+        if(isinstance(shielded_areas, list)):
+            for area in shielded_areas:
+                # 执行屏蔽
+                trans = cv2.rectangle(trans, (area[0], area[1]), (area[2], area[3]), 0, thickness=cv2.FILLED)
         # 计算像素点误差
         diff = cv2.absdiff(trans, img2)
         if(show_diff):
+            cv2.imshow("try_match:trans", trans)
             cv2.imshow("try_match:diff", diff)
+            cv2.waitKey(1)
         loss = cv2.countNonZero(diff)
         return loss
 
@@ -265,7 +299,9 @@ class LabelChecker():
         best param in [x, y, angle]
     @note: 本函数只能处理微小误差(半行以内), 即初始时应当已几乎匹配
     '''
-    def fine_tune(self, test, std, max_abs_x:int, max_abs_y:int, max_abs_a:float, max_iterations, angle_step = 0.1, view_size:int = 2):
+    def fine_tune(self, test, std, max_abs_x:int, max_abs_y:int, max_abs_a:float, max_iterations, 
+        shielded_areas:list=None, angle_step = 0.1, view_size:int = 2, show_process:bool = False
+    ):
         iterations = 0
         # 初始值与现值
         curr_x = 0
@@ -273,15 +309,23 @@ class LabelChecker():
         curr_a = 0
         ## [x, y, angle]
         last_params = [0, 0, 0.]
-        last_loss = self.try_match(test, std, 0, 0, 0)
+        last_loss = self.try_match(
+            test, std, 
+            x=0, 
+            y=0, 
+            angle=0, 
+            shielded_areas=shielded_areas
+        )
         best_params = last_params
         best_loss = last_loss
         logging.info("iteration: %d, loss: %f" % (iterations, last_loss))
 
-        # xy损失矩阵，未计算点位为-1，TODO: 可变视野大小
-        xy_loss = np.full((3, 3), -1)
-        # 旋转角度损失矩阵，未计算点为-1
-        angle_loss = np.full(view_size * 2 + 1, -1)
+        # 矩阵大小
+        matrix_size = view_size * 2 + 1
+        ## xy损失矩阵, 未计算点位为-1
+        xy_loss = np.full((matrix_size, matrix_size), -1)
+        # 旋转角度损失矩阵, 未计算点为-1
+        angle_loss = np.full(matrix_size, -1)
 
         # 定义结束变量
         xy_complete = False
@@ -290,26 +334,34 @@ class LabelChecker():
             iterations += 1
             
             if(xy_complete == False):
-
-                # 更新loss矩阵，并寻找loss最低值
+                # 更新loss矩阵, 并寻找loss最低值
+                ## min_dxy存放的是相对于上一轮局部最优点坐标的相对坐标, 例如:
+                ##  - 上一轮局部最优坐标点绝对值为(1, 1), 本轮局部最优坐标点为(-1, 2), 则min_dxy=[-2, 1]
                 min_dxy = [0, 0]
                 min_loss = -1
-                for i in range(3):
-                    for j in range(3):
+
+                for i in range(matrix_size):
+                    for j in range(matrix_size):
                         if(xy_loss[i][j] < 0):
-                            xy_loss[i][j] = self.try_match(test, std, curr_x + j -1, curr_y + i - 1, curr_a)
+                            xy_loss[i][j] = self.try_match(
+                                test, std, 
+                                x=curr_x + j - view_size, 
+                                y=curr_y + i - view_size, 
+                                angle=curr_a, 
+                                shielded_areas=shielded_areas
+                            )
                         if((min_loss < 0) or (xy_loss[i][j] < min_loss)):
                             min_loss = xy_loss[i][j]
-                            min_dxy = [ j - 1, i - 1 ]
+                            min_dxy = [ j - view_size, i - view_size ]
                 
                 logging.debug("xy_loss matrix: %s"%(str(xy_loss)))
                 logging.debug("minxy: %s"%(str(min_dxy)))
                 logging.debug("minloss: %d"%(min_loss))
 
-                # 当中心也为最小值时则不移动，同时停止匹配
-                if(xy_loss[1][1] == min_loss):
+                # 当中心也为最小值时则不移动, 同时停止匹配
+                if(xy_loss[view_size][view_size] == min_loss):
                     min_dxy = [ 0, 0 ]
-                    xy_complete = True            
+                    xy_complete = True
 
                 # 向最小loss方向移动
                 next_x = curr_x + min_dxy[0]
@@ -325,25 +377,42 @@ class LabelChecker():
                 elif(next_y > max_abs_y):
                     next_y = max_abs_y
                 
-                # 将x、y指向loss更低的位置，并更新loss矩阵(用-1填充矩阵)
-                if(next_x < curr_x):
-                    # 中心向左移动，矩阵向右移动
-                    xy_loss = np.concatenate((np.full((3, 1), -1), xy_loss[:, :-1]), axis = 1)                
-                elif(next_x > curr_x):
-                    # 中心向右移动，矩阵向左移动
-                    xy_loss = np.concatenate((xy_loss[:, 1:], np.full((3, 1), -1)), axis = 1)
-                if(next_y < curr_y):
-                    # 中心向上移动，矩阵向下移动
-                    xy_loss = np.concatenate((np.full((1, 3), -1), xy_loss[:-1]), axis = 0)
-                elif(next_y > curr_y):
-                    # 中心向下移动，矩阵向上移动
-                    xy_loss = np.concatenate((xy_loss[1:], np.full((1, 3), -1)), axis = 0)
+                delta_x = next_x - curr_x
+                delta_y = next_y - curr_y
+                
+                # 将x、y指向loss更低的位置, 并更新loss矩阵(用-1填充矩阵)
+                if(delta_x < 0):
+                    # 中心向左移动abs(delta_x)个坐标点, 矩阵向右移动abs(delta_x)个坐标点
+                    ## 仍有效的矩阵remain_xy=xy_loss[:, : matrix_size + delta_x]
+                    new_loss = np.full((matrix_size, matrix_size), -1)
+                    new_loss[: , abs(delta_x):] = xy_loss[:, : matrix_size + delta_x]
+                    xy_loss = new_loss
+                elif(delta_x > 0):
+                    # 中心向右移动abs(delta_x)个坐标点, 矩阵向左移动abs(delta_x)个坐标点
+                    ## 仍有效的矩阵remain_xy=xy_loss[:, delta_x: ]
+                    new_loss = np.full((matrix_size, matrix_size), -1)
+                    new_loss[: , : matrix_size - delta_x] = xy_loss[:, delta_x:]
+                    xy_loss = new_loss
+
+                if(delta_y < 0):
+                    # 中心向上移动abs(delta_y)个坐标点, 矩阵向下移动abs(delta_y)个坐标点
+                    ## 仍有效的矩阵remain_xy=xy_loss[: matrix_size + delta_y, : ]
+                    new_loss = np.full((matrix_size, matrix_size), -1)
+                    new_loss[abs(delta_y) : , : ] = xy_loss[: matrix_size + delta_y, : ]
+                    xy_loss = new_loss
+                elif(delta_y > 0):
+                    # 中心向下移动abs(delta_y)个坐标点, 矩阵向上移动abs(delta_y)个坐标点
+                    ## 仍有效的矩阵remain_xy=xy_loss[delta_y : , : ]
+                    new_loss = np.full((matrix_size, matrix_size), -1)
+                    new_loss[: matrix_size - delta_y, : ] = xy_loss[delta_y : , : ]
+                    xy_loss = new_loss
 
                 curr_x = next_x
                 curr_y = next_y
+                logging.debug("new_loss: " + str(xy_loss))
 
                 # 判定xy complete
-                ## 当xy同时抵达边界，结束匹配
+                ## 当xy同时抵达边界, 结束匹配
                 if(abs(curr_x) == max_abs_x and abs(curr_y) == max_abs_y):
                     xy_complete = True
                 ## 当矩阵未发生更新时结束匹配(此时矩阵无负值)
@@ -353,9 +422,15 @@ class LabelChecker():
                 # 更新loss向量并寻找loss最小的angle值
                 min_da = 0
                 min_loss = -1
-                for i in range(view_size * 2 + 1):
+                for i in range(matrix_size):
                     if(angle_loss[i] < 0):
-                        angle_loss[i] = self.try_match(test, std, curr_x, curr_y, curr_a + (i - view_size) * angle_step)
+                        angle_loss[i] = self.try_match(
+                            test, std, 
+                            x=curr_x, 
+                            y=curr_y, 
+                            angle=curr_a + (i - view_size) * angle_step,
+                            shielded_areas=shielded_areas
+                        )
                     if((min_loss < 0) or (angle_loss[i] < min_loss)):
                         min_loss = angle_loss[i]
                         min_da = i - view_size
@@ -370,7 +445,7 @@ class LabelChecker():
 
                 
                 _ = curr_a + min_da * angle_step
-                # 判定是否触发限幅，如是则判定angle complete
+                # 判定是否触发限幅, 如是则判定angle complete
                 if(_ < - max_abs_a):
                     curr_a = - max_abs_a
                     angle_complete = True
@@ -380,14 +455,14 @@ class LabelChecker():
                     angle_complete = True
                     continue
                 
-                # 若未限幅，向最小loss方向移动
+                # 若未限幅, 向最小loss方向移动
                 curr_a += min_da * angle_step
                 # 更新loss向量(用-1填充向量)
                 if(min_da < 0):
-                    # angle变小，则向量向右移动
+                    # angle变小, 则向量向右移动
                     angle_loss = np.full(abs(min_da), -1).extend(angle_loss[:-abs(min_da)])               
                 elif(min_da > 0):
-                    # angle变大，则向量向左移动
+                    # angle变大, 则向量向左移动
                     angle_loss = angle_loss[:-abs(min_da)].extend(np.full(abs(min_da), -1))
 
                 # 判定angle complete
@@ -400,7 +475,15 @@ class LabelChecker():
                 break
 
             # 更新本代计算误差
-            loss = self.try_match(test, std, round(curr_x), round(curr_y), curr_a, show_diff=False)
+            loss = self.try_match(
+                test, std, 
+                x=round(curr_x), 
+                y=round(curr_y), 
+                angle=curr_a,
+                shielded_areas=shielded_areas,
+                show_diff=show_process
+            )
+
 
             if(loss < best_loss):
                 best_loss = loss
@@ -419,7 +502,7 @@ class LabelChecker():
         - img2
         - tolerance: 像素误差值
     '''
-    def cut_with_tol(self, img1, img2, tolerance:int):
+    def cut_with_tol(self, img1, img2, tolerance:int, shielded_areas:list=None):
         # 将像素进行膨胀
         kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (tolerance * 2 + 1, tolerance * 2 + 1))
         img1_dilate = cv2.dilate(img1, kernel, 1)
@@ -427,4 +510,9 @@ class LabelChecker():
 
         xor = cv2.bitwise_xor(img1_dilate, img2_dilate)
         remain = cv2.bitwise_and(xor, img2)
+
+        # 执行屏蔽
+        if(isinstance(shielded_areas, list)):
+            for area in shielded_areas:
+                remain = cv2.rectangle(remain, (area[0], area[1]), (area[2], area[3]), 0, thickness=cv2.FILLED)
         return remain
