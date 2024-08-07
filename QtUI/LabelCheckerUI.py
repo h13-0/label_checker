@@ -57,8 +57,8 @@ class ProgressBarWidgts(Enum):
 class WorkingParams():
     def __init__(self, 
         h_min:int = 0, h_max:int = 170, s_min:int = 13, s_max:int = 255,
-        depth_threshold:int = 170, class_similarity:int = 90, 
-        not_good_similarity:int = 95, linear_error:int = 6,
+        depth_threshold:int = 130, class_similarity:int = 90, 
+        not_good_similarity:int = 95, linear_error:int = 7,
         defect_min_area:int = 6
     ) -> None:
         self.h_min = h_min

@@ -11,9 +11,12 @@ import logging
 import datetime
 
 from Workflow.MainWorkflow import MainWorkingFlow
-
+from Utils.Config import Config
 
 if __name__ == '__main__':
+    # 读取config
+    config = Config()
+
     # 初始化退出信号
     stop_event = threading.Event()
 
@@ -37,7 +40,7 @@ if __name__ == '__main__':
     mainWindow.show()
 
     # 初始化工作流
-    workflow = MainWorkingFlow(ui, stop_event)
+    workflow = MainWorkingFlow(ui, stop_event, config=config)
     workflow.Run()
 
     ret = app.exec()

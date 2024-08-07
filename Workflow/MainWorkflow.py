@@ -1,4 +1,5 @@
 import threading
+import os
 import time
 import cv2
 import numpy as np
@@ -10,24 +11,28 @@ from Workflow.TemplateEditor import TemplateEditor
 from Template.Template import Template
 from LabelChecker.LabelChecker import LabelChecker
 from QtUI.LabelCheckerUI import LabelCheckerUI, ButtonCallbackType, GraphicWidgets, WorkingParams, ComboBoxChangedCallback, ProgressBarWidgts
-
+from Utils.Config import Config
 
 """
 @brief: 主工作逻辑
 """
 class MainWorkingFlow():
-    def __init__(self, ui:LabelCheckerUI, stop_event:threading.Event) -> None:
+    def __init__(self, ui:LabelCheckerUI, stop_event:threading.Event, config:Config) -> None:
         self._checker = LabelChecker()
         self._img_list = {}
         self._ui = ui
         self._stop_event = stop_event
+        self._config = config
 
         # 运行时参数
         self._params = WorkingParams()
         self._params_lock = threading.Lock()
 
         # 模板编辑器相关变量
-        self._editor = TemplateEditor()
+        self._editor = None
+        self._template_id = 0
+        self._template_name = ""
+
 
         # 图像成员变量, 写入dict方便用户debug
         self._img_dict = {}
@@ -69,24 +74,41 @@ class MainWorkingFlow():
         self._ui.set_cb_changed_callback(ComboBoxChangedCallback.TemplatesChanged, self._template_changed_cb)
         self._ui.set_params_changed_callback(self._working_param_changed_cb)
 
-        # 扫描模板列表, TODO
+        # 设置默认选项为"创建新模板"
         self._ui.add_template_option("创建新模板")
-        ## TODO
-        self._template_dict = {
-            "600PPI_With_SN": Template.open("../templates/600PPI_With_SN")
-        }
+        # 扫描模板列表
+        self._template_dict = {}
+        dirs = os.listdir(self._config.template_path)
+        for dir in dirs:
+            try:
+                self._template_dict[dir] = Template.open(os.path.join(self._config.template_path, dir))
+            except Exception as e:
+                logging.warning(e)
+        
         for template in self._template_dict:
             self._ui.add_template_option(template)
-        
+
 
     """
     @brief: 创建模板编辑器的回调
     """
     def _create_editor_cb(self):
         # 回调函数一定为主线程, 因此可以操作UI
+        if(self._template_id != 0):
+            self._editor = TemplateEditor(
+                config=self._config, 
+                template_name=self._template_name,
+                template_list=[]
+            )
+        else:
+            self._editor = TemplateEditor(
+                config=self._config, 
+                template_name="",
+                template_list=[]
+            )
         self._editor.show()
         self._editor.run()
-
+        
 
     """
     @brief: 调用文件选择对话框选择文件
@@ -98,11 +120,13 @@ class MainWorkingFlow():
         return fname
 
 
-    """
-    @brief: 当目标模板更改时触发该回调函数
-    """
     def _template_changed_cb(self, id:int, curr_template:str):
+        """目标模板更改事件回调函数
+        Note: 回调函数一定会在主线程中被执行, 因此部分变量无需加锁
+        """
         logging.info("template target changed to: %s, id: %d", curr_template, id)
+        self._template_id = id
+        self._template_name = curr_template
         success = False
         if(id > 0):
             template = self._template_dict[curr_template]
@@ -131,7 +155,6 @@ class MainWorkingFlow():
             if(success):
                 with self._input_changed_lock:
                     self._input_changed = True
-
 
 
     """
@@ -198,11 +221,12 @@ class MainWorkingFlow():
         # 2. 将模板标签仿射回标准视角
         temp_wraped = self._checker.wrap_min_aera_rect(template_img, min_rect)
 
-        # 3. 将图像反色
-        temp_wraped_reversed = cv2.bitwise_not(temp_wraped)
-
-        # 4. 将标签图像转为二值图
-        temp_pattern = cv2.threshold(cv2.cvtColor(temp_wraped_reversed, cv2.COLOR_BGR2GRAY), threshold, 255, cv2.THRESH_BINARY)
+        # 3. 获取标签
+        temp_pattern = self._checker.get_pattern(
+            wraped_img=temp_wraped,
+            threshold=threshold, 
+            shielded_areas=None
+        )
 
         return [temp_wraped, temp_pattern]
 
@@ -495,8 +519,10 @@ class MainWorkingFlow():
                     logging.info("main workflow exit.")
             
             # Sleep 0.02s
-            cv2.waitKey(2)
-            #time.sleep(0.02)
+            #cv2.waitKey(2)
+            time.sleep(0.02)
+        if(self._editor is not None):
+            self._editor.exit()
         logging.info("main workflow exit.")
 
 

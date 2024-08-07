@@ -355,7 +355,7 @@
              <number>20</number>
             </property>
             <property name="value">
-             <number>6</number>
+             <number>7</number>
             </property>
             <property name="orientation">
              <enum>Qt::Orientation::Horizontal</enum>
@@ -374,7 +374,7 @@
              <number>20</number>
             </property>
             <property name="value">
-             <number>6</number>
+             <number>7</number>
             </property>
            </widget>
           </item>
@@ -571,7 +571,7 @@
       <rect>
        <x>424</x>
        <y>90</y>
-       <width>75</width>
+       <width>97</width>
        <height>72</height>
       </rect>
      </property>

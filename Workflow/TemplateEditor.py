@@ -11,10 +11,13 @@ import numpy as np
 from PyQt6.QtWidgets import QMainWindow, QFileDialog
 
 from LabelChecker.LabelChecker import LabelChecker
+from Utils.Config import Config
+
 
 class TemplateEditor():
-    def __init__(self):
-        self._ui = TemplateEditorUI()
+    def __init__(self, config:Config, template_name:str = "", template_list:list=[]):
+        self._ui = TemplateEditorUI(config, template_name, template_list)
+        self._config = config
         self._window = None
 
         self._checker = LabelChecker()
@@ -40,16 +43,16 @@ class TemplateEditor():
         if(self._window is None):
             self._window = QMainWindow()
             self._ui.setupUi(self._window)
-            self._window.closeEvent = MethodType(self._close_event, self._window)
+            self._ui.set_window_closed_callback(self._close_event)
+            #self._window.closeEvent = MethodType(self._close_event, self._window)
             self._window.show()
 
 
     """
     @brief: 窗口退出事件回调
     """
-    def _close_event(self, widget, event):
+    def _close_event(self):
         self.exit()
-        event.accept()
 
 
     """
@@ -113,11 +116,12 @@ class TemplateEditor():
         # 2. 将模板标签仿射回标准视角
         temp_wraped = self._checker.wrap_min_aera_rect(template_img, min_rect)
 
-        # 3. 将图像反色
-        temp_wraped_reversed = cv2.bitwise_not(temp_wraped)
-
-        # 4. 将标签图像转为二值图
-        temp_pattern = cv2.threshold(cv2.cvtColor(temp_wraped_reversed, cv2.COLOR_BGR2GRAY), threshold, 255, cv2.THRESH_BINARY)
+        # 3. 获取标签
+        temp_pattern = self._checker.get_pattern(
+            wraped_img=temp_wraped,
+            threshold=threshold, 
+            shielded_areas=None
+        )
 
         return [temp_wraped, temp_pattern]
 
@@ -157,15 +161,18 @@ class TemplateEditor():
                     v_max=255
                 )  
 
+                self._ui.set_graphic_widget(template_img, TemplateEditorGraphicViews.InputGraphicView)
                 self._ui.set_graphic_widget(template_wraped, TemplateEditorGraphicViews.TemplateGraphicView)
+
                 
             time.sleep(0.02)
+        
+        logging.info("Template editor exit.")
 
 
     def exit(self):
         self._stop_event.set()
-        logging.info("Template editor exit.")
-
+        
 
     def run(self, block:bool = False) -> None:
         """
