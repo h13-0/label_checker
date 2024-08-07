@@ -101,7 +101,7 @@ class Template():
         area["y1"] = y1
         area["x2"] = x2
         area["y2"] = y2
-        area_list = self._configs["shielded_areas"]
+        area_list = self._configs.get("shielded_areas", [])
         area_list.append(area)
         self._configs["shielded_areas"] = area_list
 

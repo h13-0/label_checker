@@ -97,12 +97,14 @@ class MainWorkingFlow():
         if(self._template_id != 0):
             self._editor = TemplateEditor(
                 config=self._config, 
+                parent=self._ui,
                 template_name=self._template_name,
                 template_list=[]
             )
         else:
             self._editor = TemplateEditor(
                 config=self._config, 
+                parent=self._ui,
                 template_name="",
                 template_list=[]
             )

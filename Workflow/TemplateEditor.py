@@ -1,26 +1,36 @@
 from QtUI.TemplateEditorUI import TemplateEditorUI, TemplateEditorButtonCallbacks, TemplateEditorGraphicViews
 
+import os
 import time
 import threading
+import re
 import logging
 from types import MethodType
 
 import cv2
 import numpy as np
 
-from PyQt6.QtWidgets import QMainWindow, QFileDialog
+from PyQt6.QtWidgets import QMainWindow, QFileDialog, QWidget, QMessageBox
 
+from QtUI.Widgets.MessageBox import MessageBox
 from LabelChecker.LabelChecker import LabelChecker
 from Utils.Config import Config
-
+from Template.Template import Template
 
 class TemplateEditor():
-    def __init__(self, config:Config, template_name:str = "", template_list:list=[]):
+    def __init__(self, config:Config, parent:QWidget, template_name:str = "", template_list:list=[]):
         self._ui = TemplateEditorUI(config, template_name, template_list)
         self._config = config
+        self._parent = parent
+        self._name = template_name
+        self._template_list = template_list
         self._window = None
 
+
+
+        # 初始化检测器
         self._checker = LabelChecker()
+
         self._main_thread = None
 
         # 模板图像及其互斥锁
@@ -32,20 +42,24 @@ class TemplateEditor():
         self._input_changed = False
         self._input_changed_lock = threading.Lock()
 
-        # 连接回调函数
-        self._ui.set_btn_callback(TemplateEditorButtonCallbacks.OpenTemplatePhotoClicked, self._open_template_photo_cb)
-
         # 退出事件
         self._stop_event = threading.Event()
 
 
     def show(self):
-        if(self._window is None):
-            self._window = QMainWindow()
-            self._ui.setupUi(self._window)
-            self._ui.set_window_closed_callback(self._close_event)
-            #self._window.closeEvent = MethodType(self._close_event, self._window)
-            self._window.show()
+        self._window = QMainWindow(self._parent)
+        self._ui.setupUi(self._window)
+        self._window.show()
+
+        # 连接回调函数
+        ## 按钮回调函数
+        self._ui.set_btn_callback(TemplateEditorButtonCallbacks.OpenTemplatePhotoClicked, self._open_template_photo_cb)
+
+        ## 保存事件回调函数
+        self._ui.set_save_template_callback(self._save_callback)
+
+        ## 窗口关闭回调函数
+        self._ui.set_window_closed_callback(self._close_event)
 
 
     """
@@ -168,6 +182,92 @@ class TemplateEditor():
             time.sleep(0.02)
         
         logging.info("Template editor exit.")
+
+
+    def _save_callback(self, name:str) -> bool:
+        """
+        校验模板名并存储
+        Return: bool, 保存成功与否
+        """
+        # 校验模板名
+        pattern = r'^[a-zA-Z0-9\-_]+$'
+        if(len(name) < 1):
+            MessageBox(
+                parent=self._ui,
+                title="错误",
+                content="名称不可为空",
+                icon=QMessageBox.Icon.Critical,
+                button=QMessageBox.StandardButton.Yes
+            ).exec()
+            return False
+        if(len(name) >= 31):
+            MessageBox(
+                parent=self._ui,
+                title="错误",
+                content="名称过长",
+                icon=QMessageBox.Icon.Critical,
+                button=QMessageBox.StandardButton.Yes
+            ).exec()
+            return False
+        if(not re.match(pattern, name)):
+            MessageBox(
+                parent=self._ui,
+                title="错误",
+                content="名称仅可包含字母、数字、减号\"-\"和下划线\"_\"",
+                icon=QMessageBox.Icon.Critical,
+                button=QMessageBox.StandardButton.Yes
+            ).exec()
+            return False
+        if(
+            (name in self._template_list) and
+            (name != self._name)
+        ):
+            responce = MessageBox(
+                parent=self._ui,
+                title="警告",
+                content="已有同名模板, 是否覆盖?",
+                icon=QMessageBox.Icon.Question,
+                button=QMessageBox.StandardButton.Yes|QMessageBox.StandardButton.No
+            ).exec()
+            return responce == QMessageBox.StandardButton.Yes
+
+        # 存储模板配置
+        save_path = os.path.join(self._config.template_path, name)
+        logging.info("saving " + name + " to " + save_path)
+        ## 创建文件夹
+        if(not os.path.exists(save_path)):
+            try:
+                os.makedirs(save_path)
+            except Exception as e:
+                logging.error(e)
+                QMessageBox.critical(self, "错误", str(e))
+                return False
+
+        ## 保存图像
+        try:
+            path = os.path.join(save_path, name + ".jpg")
+            cv2.imwrite(path, self._template_img)
+        except Exception as e:
+            logging.error(e)
+            QMessageBox.critical(self, "错误", str(e))
+            return False
+        ## 创建模板对象
+        template = Template(save_path)
+        template.set_img_type("jpg")
+        ## 导出屏蔽区域和OCR-条码对照区域
+        shield_areas = self._ui.get_shield_areas()
+        for area in shield_areas:
+            x1, y1, x2, y2 = area
+            template.add_shielded_area(x1, y1, x2, y2)
+
+        ## 保存模板
+        try:
+            template.save()
+        except Exception as e:
+            logging.error(e)
+            QMessageBox.critical(self, "错误", str(e))
+            return False
+        return True
 
 
     def exit(self):

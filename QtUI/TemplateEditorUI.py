@@ -6,6 +6,7 @@ from enum import Enum
 import logging
 from types import MethodType
 import re
+import threading
 
 import cv2
 
@@ -39,10 +40,6 @@ class ShieldedArea():
         self._widget = rect_widget
         self._id = id
 
-
-    def get_dict(self) -> dict:
-
-        return {}
     
     def get_widget(self) -> DraggableResizableRect:
         return self._widget
@@ -80,13 +77,13 @@ class TemplateEditorUI(Ui_TemplateEditor, QWidget):
         self._ocr_barcode_comparison_pairs_dict = {}
         self._next_shielded_areas_id = 0
         self._next_ocr_barcode_comparison_pairs_id = 0
+        self._areas_lock = threading.Lock()
         
 
-
-    """
-    @brief: GraphicView的滚轮事件响应
-    """
     def _wheel_event(self, widget, event):
+        """
+        GraphicView的滚轮事件响应
+        """
         delta = event.angleDelta().y()
         scale = 1 + delta / 1000.0
         widget.scale(scale, scale)
@@ -161,6 +158,7 @@ class TemplateEditorUI(Ui_TemplateEditor, QWidget):
         self._template_shape = None
 
         # 窗口关闭回调函数
+        self._save_template_cb = lambda:logging.debug("The callback function for save template is not set.")
         self._window_closed_cb = lambda:logging.debug("The callback function for closing the window is not set.")
 
 
@@ -181,21 +179,22 @@ class TemplateEditorUI(Ui_TemplateEditor, QWidget):
         self._graphic_views_scenes[TemplateEditorGraphicViews.TemplateGraphicView.name].addItem(rect)
         
         # 向ListView中添加元素
-        row = len(self._shielded_areas_dict)
-        self._shielded_area_list_module.setItem(row, 0, QStandardItem(str(0)))
-        self._shielded_area_list_module.setItem(row, 1, QStandardItem(str(0)))
-        self._shielded_area_list_module.setItem(row, 2, QStandardItem(str(100)))
-        self._shielded_area_list_module.setItem(row, 3, QStandardItem(str(100)))
+        with self._areas_lock:
+            row = len(self._shielded_areas_dict)
+            self._shielded_area_list_module.setItem(row, 0, QStandardItem(str(0)))
+            self._shielded_area_list_module.setItem(row, 1, QStandardItem(str(0)))
+            self._shielded_area_list_module.setItem(row, 2, QStandardItem(str(100)))
+            self._shielded_area_list_module.setItem(row, 3, QStandardItem(str(100)))
 
-        # 转为辅助对象
-        area = ShieldedArea(rect, self._next_shielded_areas_id)
-        # 存入字典
-        self._shielded_areas_dict[self._next_shielded_areas_id] = area
-        # 配置回调函数
-        rect.mouseReleaseEvent = MethodType(self._rect_release_event, area)
-        #rect.itemChange = MethodType(self._rect_changed_event, rect)
-        # ID自增
-        self._next_shielded_areas_id += 1
+            # 转为辅助对象
+            area = ShieldedArea(rect, self._next_shielded_areas_id)
+            # 存入字典
+            self._shielded_areas_dict[self._next_shielded_areas_id] = area
+            # 配置回调函数
+            rect.mouseReleaseEvent = MethodType(self._rect_release_event, area)
+            #rect.itemChange = MethodType(self._rect_changed_event, rect)
+            # ID自增
+            self._next_shielded_areas_id += 1
 
 
     def _del_shielded_area_callback(self):
@@ -206,15 +205,16 @@ class TemplateEditorUI(Ui_TemplateEditor, QWidget):
         for index in selected_indexs:
             if(not index.row() in selected_rows):
                 selected_rows.insert(0, index.row())
+        with self._areas_lock:
         # 删除对应元素及列表
-        for row in selected_rows:
-            ## 从scene中删除对应元素
-            key = list(self._shielded_areas_dict.keys())[row]
-            self._graphic_views_scenes[TemplateEditorGraphicViews.TemplateGraphicView.name].removeItem(self._shielded_areas_dict[key].get_widget())
-            ## 从列表中删除对应元素
-            self._shielded_area_list_module.removeRow(row)
-            ## 从dict中删除对应元素
-            self._shielded_areas_dict.pop(key)
+            for row in selected_rows:
+                ## 从scene中删除对应元素
+                key = list(self._shielded_areas_dict.keys())[row]
+                self._graphic_views_scenes[TemplateEditorGraphicViews.TemplateGraphicView.name].removeItem(self._shielded_areas_dict[key].get_widget())
+                ## 从列表中删除对应元素
+                self._shielded_area_list_module.removeRow(row)
+                ## 从dict中删除对应元素
+                self._shielded_areas_dict.pop(key)
 
 
     """
@@ -266,19 +266,12 @@ class TemplateEditorUI(Ui_TemplateEditor, QWidget):
         DraggableResizableRect.itemChange(area.get_widget(), change, value)
 
 
+    def _get_coor_from_rect(self, rect:DraggableResizableRect) -> list:
+        """
+        从DraggableResizableRect中获取左上角和右下角坐标
 
-    def _rect_release_event(self, area, event):
-        """鼠标松开事件, 用于边界检测"""
-        rect = None
-        if(isinstance(area, ShieldedArea)):
-            rect = area.get_widget()
-        else:
-            # todo
-            pass
-        logging.debug(rect.rect())
-        logging.debug(rect.scenePos())
-        DraggableResizableRect.mouseReleaseEvent(rect, event)
-
+        Return: [x1, y1, x2, y2]
+        """
         # 获取左上角右下角坐标
         x1 = rect.scenePos().x()
         y1 = rect.scenePos().y()
@@ -311,6 +304,25 @@ class TemplateEditorUI(Ui_TemplateEditor, QWidget):
             y2 = 3
         elif(y2 > self._template_shape[0] - h):
             y2 = self._template_shape[0] - h
+        
+        return [x1, y1, x2, y2]
+
+
+    def _rect_release_event(self, area, event):
+        """鼠标松开事件, 用于边界检测"""
+        rect = None
+        if(isinstance(area, ShieldedArea)):
+            rect = area.get_widget()
+        else:
+            # todo
+            pass
+        logging.debug(rect.rect())
+        logging.debug(rect.scenePos())
+        DraggableResizableRect.mouseReleaseEvent(rect, event)
+
+        x1, y1, x2, y2 = self._get_coor_from_rect(rect)
+        w = x2 - x1
+        h = y2 - y1
 
         rect.setPos(QPointF(x1, y1))
         rect.setRect(QRectF(0, 0, w, h))
@@ -318,7 +330,9 @@ class TemplateEditorUI(Ui_TemplateEditor, QWidget):
         # 更新数据到ListView
         if(isinstance(area, ShieldedArea)):
             ## 以下操作需要Python 3.7+
-            shielded_areas_list = list(self._shielded_areas_dict.keys())
+            shielded_areas_list = []
+            with self._areas_lock:
+                shielded_areas_list = list(self._shielded_areas_dict.keys())
             row = shielded_areas_list.index(area.get_id())
             self._shielded_area_list_module.setItem(row, 0, QStandardItem(str(round(x1))))
             self._shielded_area_list_module.setItem(row, 1, QStandardItem(str(round(y1))))
@@ -327,61 +341,6 @@ class TemplateEditorUI(Ui_TemplateEditor, QWidget):
         else:
             # todo
             pass
-
-
-    def _save_template(self, name:str) -> bool:
-        """
-        校验模板名并存储
-        Return: bool, 保存成功与否
-        """
-        # 校验模板名
-        pattern = r'^[a-zA-Z0-9\-_]+$'
-        if(len(name) < 1):
-            QMessageBox.critical(self, "错误", "名称不可为空")
-            return False
-        if(len(name) >= 31):
-            QMessageBox.critical(self, "错误", "名称过长")
-            return False
-        if(not re.match(pattern, name)):
-            QMessageBox.critical(self, "错误", "名称仅可包含字母、数字、减号\"-\"和下划线\"_\"")
-            return False
-        if(
-            (name in self._template_list) and
-            (name != self._name)
-        ):
-            return (str(QMessageBox.question(self, "警告", "已有同名模板, 是否覆盖?")) == 'StandardButton.Yes')
-        
-        # 存储模板配置
-        template_path = self._config.template_path
-        ## 创建文件夹
-        if(not os.path.exists(template_path)):
-            try:
-                os.makedirs(template_path)
-            except Exception as e:
-                logging.error(e)
-                QMessageBox.critical(self, "错误", str(e))
-                return False
-
-        ## 保存图像
-        try:
-            #cv2.imwrite(os.path.join(template_path, name + ".jpg"), self.)
-            pass
-        except Exception as e:
-            logging.error(e)
-            QMessageBox.critical(self, "错误", str(e))
-            return False
-        ## 创建模板对象
-        template = Template(os.path.join(template_path, name))
-        template.set_img_type("jpg")
-
-        ## 保存模板
-        try:
-            template.save()
-        except Exception as e:
-            logging.error(e)
-            QMessageBox.critical(self, "错误", str(e))
-            return False
-        return True
 
 
     def _window_close_event(self, window, event):
@@ -395,13 +354,14 @@ class TemplateEditorUI(Ui_TemplateEditor, QWidget):
         ok_pressed = dialog.exec()
         if(ok_pressed): 
             name = dialog.textValue()
-            if(self._save_template(name)):
+            #if(self._save_template(name)):
+            if(self._save_template_cb(name)):
                 self._window_closed_cb()
                 event.accept()
             else:
                 event.ignore()
         else:
-            if(str(QMessageBox.question(self, "警告", "确定放弃保存?")) == 'StandardButton.Yes'):
+            if(QMessageBox.question(self, "警告", "确定放弃保存?") == QMessageBox.StandardButton.Yes):
                 self._window_closed_cb()
                 event.accept()
             else:
@@ -411,3 +371,16 @@ class TemplateEditorUI(Ui_TemplateEditor, QWidget):
     def set_window_closed_callback(self, callback):
         self._window_closed_cb = callback
 
+
+    def set_save_template_callback(self, callback):
+        self._save_template_cb = callback
+
+
+    def get_shield_areas(self) -> list:
+        areas = []
+        ## 导出屏蔽区域列表
+        with self._areas_lock:
+            for key in self._shielded_areas_dict:
+                area = self._shielded_areas_dict[key]
+                areas.append(self._get_coor_from_rect(area.get_widget()))
+        return areas
