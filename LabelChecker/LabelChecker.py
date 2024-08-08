@@ -494,20 +494,20 @@ class LabelChecker():
         return best_params
 
 
-    '''
-    @brief: 用img1来切img2, 返回img2剩余部分
-    @note: 图像均为二值图
-    @param: 
-        - img1
-        - img2
-        - tolerance: 像素误差值
-    '''
+
     def cut_with_tol(self, img1, img2, tolerance:int, shielded_areas:list=None):
-        # 将像素进行膨胀
+        '''
+        @brief: 膨胀相切算法, 用img1来切img2, 返回img2剩余部分, 使用时要交替互相相切最终得误差图
+        @note: 图像均为二值图
+        @param: 
+            - img1
+            - img2
+            - tolerance: 像素误差值
+        '''
+        # 先进行膨胀相切(0腐蚀)
         kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (tolerance * 2 + 1, tolerance * 2 + 1))
         img1_dilate = cv2.dilate(img1, kernel, 1)
         img2_dilate = cv2.dilate(img2, kernel, 1)
-
         xor = cv2.bitwise_xor(img1_dilate, img2_dilate)
         remain = cv2.bitwise_and(xor, img2)
 

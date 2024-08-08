@@ -489,6 +489,10 @@ class MainWorkingFlow():
                         thickness=2
                     )
 
+                    # TODO: delete
+                    cv2.imwrite("../img/target_trans" + str(time.time()) + ".jpg", target_trans)
+
+
                     # 绘制误差点并输出图像
                     if(similarity * 100 > params.class_similarity):
                         # 同类标签中绘制误差点
@@ -513,12 +517,13 @@ class MainWorkingFlow():
                         # 高精度误差图
                         target_remain = self._checker.cut_with_tol(template_pattern, pattern, 0, template_shielded_areas)
                         template_remain = self._checker.cut_with_tol(pattern, template_pattern, 0, template_shielded_areas)
-                        #diff_high_pre = cv2.bitwise_or(target_remain, template_remain)
-                        #diff_high_pre_bgr = cv2.cvtColor(diff_high_pre, cv2.COLOR_GRAY2BGR)
-                        #target_result["id: " + str(id) + " high diff"] = diff_high_pre_bgr
+                        diff_high_pre = cv2.bitwise_or(target_remain, template_remain)
+                        diff_high_pre_bgr = cv2.cvtColor(diff_high_pre, cv2.COLOR_GRAY2BGR)
+                        target_result["id: " + str(id) + " high diff"] = diff_high_pre_bgr
 
                         pattern_bgr = cv2.cvtColor(pattern, cv2.COLOR_GRAY2BGR)
                         target_result["id: " + str(id) + " pattern"] = pattern_bgr
+
 
                     # 输出进度到进度条
                     self._ui.set_progress_bar_value(ProgressBarWidgts.CompareProgressBar, int((id + 1) * 100 / target_num))

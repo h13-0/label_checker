@@ -210,7 +210,6 @@ class TemplateEditor():
                 self._ui.set_graphic_widget(template_img, TemplateEditorGraphicViews.InputGraphicView)
                 self._ui.set_graphic_widget(template_wraped, TemplateEditorGraphicViews.TemplateGraphicView)
 
-                
             time.sleep(0.02)
         
         logging.info("Template editor exit.")
