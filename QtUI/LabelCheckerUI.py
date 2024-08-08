@@ -93,6 +93,7 @@ class LabelCheckerUI(Ui_LabelChecker, QWidget):
     _set_graphic_detail_signal = pyqtSignal(dict)
     _make_msg_box_signal = pyqtSignal(str, str)
     _add_item_to_templates_combo_box_signal = pyqtSignal(str)
+    _clear_combo_box_signal = pyqtSignal()
     ## 进度条操作信号
     _set_progress_bar_value_signal = pyqtSignal(ProgressBarWidgts, int)
 
@@ -197,8 +198,10 @@ class LabelCheckerUI(Ui_LabelChecker, QWidget):
         self.TemplateGraphicView.wheelEvent = MethodType(self._wheel_event, self.TemplateGraphicView)
 
         ## 连接自定义信号
-        ### ComboBox 添加元素
+        ### 向ComboBox添加元素
         self._add_item_to_templates_combo_box_signal.connect(self._add_item_to_templates_combo_box)
+        ### 清除ComboBox中所有元素
+        self._clear_combo_box_signal.connect(self._clear_combo_box)
         ### GraphicView 更新图像
         self._update_graphic_signal.connect(self._update_graphic_view, type=Qt.ConnectionType.BlockingQueuedConnection)
         self._set_graphic_detail_signal.connect(self._set_graphic_detail_content, type=Qt.ConnectionType.BlockingQueuedConnection)
@@ -306,6 +309,13 @@ class LabelCheckerUI(Ui_LabelChecker, QWidget):
         self.TemplatesComboBox.addItem(item)
 
 
+    def _clear_combo_box(self):
+        """
+        清除ComboBox中所有元素
+        """
+        self.TemplatesComboBox.clear()
+
+
     """
     @brief: 设置 "图像详情列表" 元素的槽函数
     @param:
@@ -394,11 +404,18 @@ class LabelCheckerUI(Ui_LabelChecker, QWidget):
         self._param_callback = callback
 
 
-    """
-    @brief: 向模板列表中增加选项
-    """
     def add_template_option(self, option:str):
+        """
+        @brief: 向模板列表中增加选项
+        """
         self._add_item_to_templates_combo_box_signal.emit(option)
+
+
+    def clear_template_option(self):
+        """
+        清除向模板列表中的所有选项
+        """
+        self._clear_combo_box_signal.emit()
 
 
     """

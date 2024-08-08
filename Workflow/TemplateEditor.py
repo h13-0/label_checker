@@ -26,11 +26,8 @@ class TemplateEditor():
         self._template_list = template_list
         self._window = None
 
-
-
         # 初始化检测器
         self._checker = LabelChecker()
-
         self._main_thread = None
 
         # 模板图像及其互斥锁
@@ -44,6 +41,13 @@ class TemplateEditor():
 
         # 退出事件
         self._stop_event = threading.Event()
+        self._exit_cb = lambda: logging.debug("exit_callback not set.")
+
+        # 加载Template
+        self._template = None
+        if(len(template_name)):
+            ## 导入template
+            self._template = self._load_template(os.path.join(config.template_path, template_name))
 
 
     def show(self):
@@ -60,6 +64,34 @@ class TemplateEditor():
 
         ## 窗口关闭回调函数
         self._ui.set_window_closed_callback(self._close_event)
+
+
+    def set_exit_callback(self, callback):
+        self._exit_cb = callback
+
+
+    def _load_template(self, save_path:str) -> Template:
+        template = None
+        template_img = None
+        shielded_areas = None
+        success = False
+        try:
+            template = Template.open(save_path)
+            template_img = cv2.imread(template.get_img_path())
+            shielded_areas = template.get_shielded_areas()
+            success = True
+        except Exception as e:
+            logging.error(e)
+        
+        if(success):
+            with self._template_lock:
+                self._template_img = template_img
+                self._template_img_id += 1
+            with self._input_changed_lock:
+                    self._input_changed = True
+            for area in shielded_areas:
+                # 我也不明白为什么不会自动转int, 同时还不报错
+                self._ui.add_shielded_area(area["x1"], area["y1"], area["x2"], area["y2"])
 
 
     """
@@ -182,6 +214,7 @@ class TemplateEditor():
             time.sleep(0.02)
         
         logging.info("Template editor exit.")
+        self._exit_cb()
 
 
     def _save_callback(self, name:str) -> bool:
@@ -252,17 +285,18 @@ class TemplateEditor():
             QMessageBox.critical(self, "错误", str(e))
             return False
         ## 创建模板对象
-        template = Template(save_path)
-        template.set_img_type("jpg")
+        if(self._template is None):
+            self._template = Template(save_path)
+        self._template.set_img_type("jpg")
         ## 导出屏蔽区域和OCR-条码对照区域
         shield_areas = self._ui.get_shield_areas()
         for area in shield_areas:
             x1, y1, x2, y2 = area
-            template.add_shielded_area(x1, y1, x2, y2)
+            self._template.add_shielded_area(x1, y1, x2, y2)
 
         ## 保存模板
         try:
-            template.save()
+            self._template.save()
         except Exception as e:
             logging.error(e)
             QMessageBox.critical(self, "错误", str(e))

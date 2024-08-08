@@ -10,7 +10,7 @@ import threading
 
 import cv2
 
-from PyQt6.QtCore import pyqtSignal, Qt, QRectF, QPointF
+from PyQt6.QtCore import pyqtSignal, pyqtSlot, Qt, QRectF, QPointF
 from PyQt6.QtWidgets import QWidget, QGraphicsScene, QGraphicsPixmapItem, QGraphicsView, QInputDialog, QMessageBox
 from PyQt6.QtGui import QPixmap, QImage, QColor, QStandardItemModel, QStandardItem
 
@@ -60,6 +60,7 @@ class OCR_BarcodePairs():
 class TemplateEditorUI(Ui_TemplateEditor, QWidget):
     # 定义Qt信号
     _update_graphic_signal = pyqtSignal(QImage, TemplateEditorGraphicViews)
+    _add_shield_area_signal = pyqtSignal(int, int, int, int)
     def __init__(self, config:Config, name:str = "", template_list:list=[]):
         Ui_TemplateEditor.__init__(self)
         QWidget.__init__(self)
@@ -138,6 +139,7 @@ class TemplateEditorUI(Ui_TemplateEditor, QWidget):
 
         ## 连接自定义信号
         self._update_graphic_signal.connect(self._update_graphic_view, type=Qt.ConnectionType.BlockingQueuedConnection)
+        self._add_shield_area_signal.connect(self._add_shielded_area)
 
         # 初始化GraphicView映射
         self._graphic_views = {
@@ -162,15 +164,17 @@ class TemplateEditorUI(Ui_TemplateEditor, QWidget):
         self._window_closed_cb = lambda:logging.debug("The callback function for closing the window is not set.")
 
 
-    """
-    @brief: UI内部专用按钮及逻辑的槽函数
-    """
-    def _add_shielded_area_callback(self):
+    @pyqtSlot()
+    def _add_shielded_area(self, x1:int, y1:int, x2:int, y2:int):
+        """
+        向模板中增加屏蔽区域方框
+        """
+        logging.debug("receive")
         rect = DraggableResizableRect(
-            x=0, 
-            y=0, 
-            width=100, 
-            height=100,
+            x=x1, 
+            y=y1, 
+            width=x2-x1, 
+            height=y2-y1,
             fill_color=QColor(0, 0, 0, 10),
             edge_color=QColor(0, 0, 0, 100),
             edge_size=5
@@ -197,6 +201,15 @@ class TemplateEditorUI(Ui_TemplateEditor, QWidget):
             self._next_shielded_areas_id += 1
 
 
+    """
+    @brief: UI内部专用按钮及逻辑的槽函数
+    """
+    @pyqtSlot()
+    def _add_shielded_area_callback(self):
+        self._add_shielded_area(x1=0, y1=0, x2=100, y2=50)
+
+
+    @pyqtSlot()
     def _del_shielded_area_callback(self):
         """删除屏蔽区域的槽函数"""
         selected_indexs = self.ShieldedAreaList.selectionModel().selectedIndexes()
@@ -290,7 +303,7 @@ class TemplateEditorUI(Ui_TemplateEditor, QWidget):
             y1 = 0
         elif(y1 > self._template_shape[0] - h):
             y1 = self._template_shape[0] - h
-        
+            
         # 计算右下角坐标
         x2 = x1 + w
         y2 = y1 + h
@@ -298,12 +311,12 @@ class TemplateEditorUI(Ui_TemplateEditor, QWidget):
         # 判断右下角是否越界, 同时避免矩形尺寸小于3*3
         if(x2 < 3):
             x2 = 3
-        elif(x2 > self._template_shape[1] - w):
-            x2 = self._template_shape[1] - w
+        elif(x2 > self._template_shape[1]):
+            x2 = self._template_shape[1]
         if(y2 < 3):
             y2 = 3
-        elif(y2 > self._template_shape[0] - h):
-            y2 = self._template_shape[0] - h
+        elif(y2 > self._template_shape[0]):
+            y2 = self._template_shape[0]
         
         return [x1, y1, x2, y2]
 
@@ -316,8 +329,9 @@ class TemplateEditorUI(Ui_TemplateEditor, QWidget):
         else:
             # todo
             pass
-        logging.debug(rect.rect())
-        logging.debug(rect.scenePos())
+        logging.debug("rect: " + str(rect.rect()))
+        logging.debug("pos: " + str(rect.scenePos()))
+        logging.debug("img shape: " + str(self._template_shape))
         DraggableResizableRect.mouseReleaseEvent(rect, event)
 
         x1, y1, x2, y2 = self._get_coor_from_rect(rect)
@@ -366,6 +380,11 @@ class TemplateEditorUI(Ui_TemplateEditor, QWidget):
                 event.accept()
             else:
                 event.ignore()
+
+
+    def add_shielded_area(self, x1:int, y1:int, x2:int, y2:int):
+        logging.debug("add")
+        self._add_shield_area_signal.emit(x1, y1, x2, y2)
 
 
     def set_window_closed_callback(self, callback):

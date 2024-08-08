@@ -74,6 +74,16 @@ class MainWorkingFlow():
         self._ui.set_cb_changed_callback(ComboBoxChangedCallback.TemplatesChanged, self._template_changed_cb)
         self._ui.set_params_changed_callback(self._working_param_changed_cb)
 
+        # 刷新模板列表
+        self._refresh_templates()
+
+
+    def _refresh_templates(self):
+        """
+        刷新Template列表
+        """
+        # 清除所有选项
+        self._ui.clear_template_option()
         # 设置默认选项为"创建新模板"
         self._ui.add_template_option("创建新模板")
         # 扫描模板列表
@@ -108,6 +118,7 @@ class MainWorkingFlow():
                 template_name="",
                 template_list=[]
             )
+        self._editor.set_exit_callback(lambda: self._refresh_templates())
         self._editor.show()
         self._editor.run()
         

@@ -43,6 +43,14 @@ class Template():
             logging.error(msg)
             raise RuntimeError(msg)
     
+        ## 将config中的坐标自动转为int
+        if("shielded_areas" in self._configs):
+            for area in self._configs["shielded_areas"]:
+                area["x1"] = round(area["x1"])
+                area["y1"] = round(area["y1"])
+                area["x2"] = round(area["x2"])
+                area["y2"] = round(area["y2"])
+
 
     @staticmethod
     def open(save_path:str):
@@ -79,7 +87,7 @@ class Template():
 
 
     def get_shielded_areas(self):
-        return self._configs["shielded_areas"]
+        return self._configs.get("shielded_areas", [])
 
 
     def get_img_path(self):
