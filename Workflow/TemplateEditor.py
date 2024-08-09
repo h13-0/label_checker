@@ -45,7 +45,7 @@ class TemplateEditor():
 
         # 加载Template
         self._template = None
-        self._shielded_areas = None
+        self._shielded_areas = []
         if(len(template_name)):
             ## 导入template
             self._template = self._load_template(os.path.join(config.template_path, template_name))

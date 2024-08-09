@@ -36,7 +36,9 @@ class TemplateEditorGraphicViews(Enum):
 
 class ShieldedArea():
     def __init__(self, rect_widget:DraggableResizableRect, id:int) -> None:
-        """屏蔽区对象, 用于引用并记录控件, 并生成dict供录入yaml"""
+        """
+        @brief: 屏蔽区对象, 用于引用并记录控件, 并生成dict供录入yaml
+        """
         self._widget = rect_widget
         self._id = id
 
@@ -48,11 +50,11 @@ class ShieldedArea():
         return self._id
 
 
-"""
-@brief: OCR-条码对照区域
-"""
 class OCR_BarcodePairs():
     def __init__(self) -> None:
+        """
+        @brief: OCR-条码对照区域
+        """
         self._ocr_area = None
         self._barcode_area = None
 
@@ -200,17 +202,19 @@ class TemplateEditorUI(Ui_TemplateEditor, QWidget):
             self._next_shielded_areas_id += 1
 
 
-    """
-    @brief: UI内部专用按钮及逻辑的槽函数
-    """
     @pyqtSlot()
     def _add_shielded_area_callback(self):
+        """
+        @brief: UI内部专用按钮及逻辑的槽函数
+        """
         self._add_shielded_area(x1=0, y1=0, x2=100, y2=50)
 
 
     @pyqtSlot()
     def _del_shielded_area_callback(self):
-        """删除屏蔽区域的槽函数"""
+        """
+        @brief: 删除屏蔽区域的槽函数
+        """
         selected_indexs = self.ShieldedAreaList.selectionModel().selectedIndexes()
         selected_rows = []
         # 将所选中的行倒序插入列表, 方便删除
@@ -229,29 +233,29 @@ class TemplateEditorUI(Ui_TemplateEditor, QWidget):
                 self._shielded_areas_dict.pop(key)
 
 
-    """
-    @brief: 通用按钮(TemplateEditorButtonCallbacks)点击事件槽函数
-    """
     def _btn_callbacks(self, target:TemplateEditorButtonCallbacks):
+        """
+        @brief: 通用按钮(TemplateEditorButtonCallbacks)点击事件槽函数
+        """
         if(not target.name in self._btn_callback_map):
             logging.warning("Callback: " + target.name + " not set.")
         else:
             self._btn_callback_map[target.name]()
 
 
-    """
-    @brief: 设置通用按钮回调函数的接口, 可用于设置 `ButtonCallbackType` 中定义的所有类型回调
-    @param:
-        - callback: 回调函数, 原型应为 func()
-    """
     def set_btn_callback(self, target:TemplateEditorButtonCallbacks, callback):
+        """
+        @brief: 设置通用按钮回调函数的接口, 可用于设置 `ButtonCallbackType` 中定义的所有类型回调
+        @param:
+            - callback: 回调函数, 原型应为 func()
+        """
         self._btn_callback_map[target.name] = callback
 
 
-    """
-    @brief: 更新图像的槽函数
-    """
     def _update_graphic_view(self, img:QImage, target:TemplateEditorGraphicViews):
+        """
+        @brief: 更新图像的槽函数
+        """
         pixmap = QPixmap.fromImage(img)
         pixmap_item = QGraphicsPixmapItem(pixmap)
         self._graphic_views_scenes[target.name].clear()
@@ -259,10 +263,10 @@ class TemplateEditorUI(Ui_TemplateEditor, QWidget):
         self._graphic_views_scenes[target.name].update()
 
 
-    """
-    @brief: 设置图像控件的图像
-    """
     def set_graphic_widget(self, cv2_img, target:TemplateEditorGraphicViews):
+        """
+        @brief: 设置图像控件的图像
+        """
         if(target == TemplateEditorGraphicViews.TemplateGraphicView):
             self._template_shape = cv2_img.shape
         rgb_img = cv2.cvtColor(cv2_img, cv2.COLOR_BGR2RGB)
@@ -273,16 +277,16 @@ class TemplateEditorUI(Ui_TemplateEditor, QWidget):
 
 
     def _rect_changed_event(self, area:ShieldedArea, change, value):
-        """矩形形状改变事件, 用于长度宽度限幅"""
-
+        """
+        @brief: 矩形形状改变事件, 用于长度宽度限幅
+        """
         DraggableResizableRect.itemChange(area.get_widget(), change, value)
 
 
     def _get_coor_from_rect(self, rect:DraggableResizableRect) -> list:
         """
-        从DraggableResizableRect中获取左上角和右下角坐标
-
-        Return: [x1, y1, x2, y2]
+        @brief: 从DraggableResizableRect中获取左上角和右下角坐标
+        @return: [x1, y1, x2, y2]
         """
         # 获取左上角右下角坐标
         x1 = rect.scenePos().x()
@@ -290,17 +294,21 @@ class TemplateEditorUI(Ui_TemplateEditor, QWidget):
         w = rect.rect().width()
         h = rect.rect().height()
         # 修正坐标
-        x1 -= rect.rect().x()
-        y1 -= rect.rect().y()
+        x1 += rect.rect().x()
+        y1 += rect.rect().y()
 
         # 判断左上角是否越界, 同时避免矩形尺寸小于3*3
         if(x1 < 0):
+            logging.debug("cond1 x1=%d", x1)
             x1 = 0
         elif(x1 > self._template_shape[1] - w):
+            logging.debug("cond2 x1=%d", x1)
             x1 = self._template_shape[1] - w
         if(y1 < 0):
+            logging.debug("cond3 y1=%d", y1)
             y1 = 0
         elif(y1 > self._template_shape[0] - h):
+            logging.debug("cond4 y1=%d", y1)
             y1 = self._template_shape[0] - h
             
         # 计算右下角坐标
@@ -309,19 +317,25 @@ class TemplateEditorUI(Ui_TemplateEditor, QWidget):
 
         # 判断右下角是否越界, 同时避免矩形尺寸小于3*3
         if(x2 < 3):
+            logging.debug("cond5 x2=%d", x2)
             x2 = 3
         elif(x2 > self._template_shape[1]):
+            logging.debug("cond6 x2=%d", x2)
             x2 = self._template_shape[1]
         if(y2 < 3):
+            logging.debug("cond7 y2=%d", y2)
             y2 = 3
         elif(y2 > self._template_shape[0]):
+            logging.debug("cond8 y2=%d", y2)
             y2 = self._template_shape[0]
         
         return [x1, y1, x2, y2]
 
 
     def _rect_release_event(self, area, event):
-        """鼠标松开事件, 用于边界检测"""
+        """
+        @brief: 鼠标松开事件, 用于边界检测
+        """
         rect = None
         if(isinstance(area, ShieldedArea)):
             rect = area.get_widget()
