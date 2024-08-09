@@ -45,6 +45,7 @@ class TemplateEditor():
 
         # 加载Template
         self._template = None
+        self._shielded_areas = None
         if(len(template_name)):
             ## 导入template
             self._template = self._load_template(os.path.join(config.template_path, template_name))
@@ -73,12 +74,11 @@ class TemplateEditor():
     def _load_template(self, save_path:str) -> Template:
         template = None
         template_img = None
-        shielded_areas = None
         success = False
         try:
             template = Template.open(save_path)
             template_img = cv2.imread(template.get_img_path())
-            shielded_areas = template.get_shielded_areas()
+            self._shielded_areas = template.get_shielded_areas()
             success = True
         except Exception as e:
             logging.error(e)
@@ -89,9 +89,7 @@ class TemplateEditor():
                 self._template_img_id += 1
             with self._input_changed_lock:
                     self._input_changed = True
-            for area in shielded_areas:
-                # 我也不明白为什么不会自动转int, 同时还不报错
-                self._ui.add_shielded_area(area["x1"], area["y1"], area["x2"], area["y2"])
+
 
 
     """
@@ -176,6 +174,7 @@ class TemplateEditor():
         # 模板原图
         template_img = None
         curr_template_id = 0
+        area_inited = False
         while(not self._stop_event.is_set()):
             # 检测是否需要开启下一批计算
             input_changed = False
@@ -209,6 +208,12 @@ class TemplateEditor():
 
                 self._ui.set_graphic_widget(template_img, TemplateEditorGraphicViews.InputGraphicView)
                 self._ui.set_graphic_widget(template_wraped, TemplateEditorGraphicViews.TemplateGraphicView)
+            
+                if(not area_inited):
+                    for area in self._shielded_areas:
+                        # 我也不明白为什么不会自动转int, 同时还不报错
+                        self._ui.add_shielded_area(area["x1"], area["y1"], area["x2"], area["y2"])
+
 
             time.sleep(0.02)
         

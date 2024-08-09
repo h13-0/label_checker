@@ -139,7 +139,7 @@ class TemplateEditorUI(Ui_TemplateEditor, QWidget):
 
         ## 连接自定义信号
         self._update_graphic_signal.connect(self._update_graphic_view, type=Qt.ConnectionType.BlockingQueuedConnection)
-        self._add_shield_area_signal.connect(self._add_shielded_area)
+        self._add_shield_area_signal.connect(self._add_shielded_area, type=Qt.ConnectionType.QueuedConnection)
 
         # 初始化GraphicView映射
         self._graphic_views = {
@@ -164,18 +164,17 @@ class TemplateEditorUI(Ui_TemplateEditor, QWidget):
         self._window_closed_cb = lambda:logging.debug("The callback function for closing the window is not set.")
 
 
-    @pyqtSlot()
+    @pyqtSlot(int, int, int, int)
     def _add_shielded_area(self, x1:int, y1:int, x2:int, y2:int):
         """
         向模板中增加屏蔽区域方框
         """
-        logging.debug("receive")
         rect = DraggableResizableRect(
             x=x1, 
             y=y1, 
             width=x2-x1, 
             height=y2-y1,
-            fill_color=QColor(0, 0, 0, 10),
+            fill_color=QColor(0, 0, 0, 50),
             edge_color=QColor(0, 0, 0, 100),
             edge_size=5
         )
@@ -185,10 +184,10 @@ class TemplateEditorUI(Ui_TemplateEditor, QWidget):
         # 向ListView中添加元素
         with self._areas_lock:
             row = len(self._shielded_areas_dict)
-            self._shielded_area_list_module.setItem(row, 0, QStandardItem(str(0)))
-            self._shielded_area_list_module.setItem(row, 1, QStandardItem(str(0)))
-            self._shielded_area_list_module.setItem(row, 2, QStandardItem(str(100)))
-            self._shielded_area_list_module.setItem(row, 3, QStandardItem(str(100)))
+            self._shielded_area_list_module.setItem(row, 0, QStandardItem(str(x1)))
+            self._shielded_area_list_module.setItem(row, 1, QStandardItem(str(y1)))
+            self._shielded_area_list_module.setItem(row, 2, QStandardItem(str(x2)))
+            self._shielded_area_list_module.setItem(row, 3, QStandardItem(str(y2)))
 
             # 转为辅助对象
             area = ShieldedArea(rect, self._next_shielded_areas_id)
@@ -383,8 +382,7 @@ class TemplateEditorUI(Ui_TemplateEditor, QWidget):
 
 
     def add_shielded_area(self, x1:int, y1:int, x2:int, y2:int):
-        logging.debug("add")
-        self._add_shield_area_signal.emit(x1, y1, x2, y2)
+        self._add_shield_area_signal[int, int, int, int].emit(x1, y1, x2, y2)
 
 
     def set_window_closed_callback(self, callback):

@@ -20,7 +20,7 @@ class DraggableResizableRect(QGraphicsRectItem):
         self.setAcceptHoverEvents(True)
         self.pen = QPen(edge_color)
         self.pen.setWidth(edge_size)
-        self.brush = QBrush(edge_color)
+        self.brush = QBrush(fill_color)
         self.setPen(self.pen)
         self.setBrush(self.brush)
         self.edge_size = edge_size

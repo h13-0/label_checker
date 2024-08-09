@@ -8,15 +8,15 @@ class LabelChecker():
         pass
 
 
-    '''
-    @brief: 从图像中寻找标签
-    @note: 输入图像应当仅包含一个标签
-    @return: minAreaRect
-    '''
     def find_label(self, 
         img, h_min:int, h_max:int, s_min:int, s_max:int, v_min:int, v_max:int,
         show_mask:bool = False
     ):
+        '''
+        @brief: 从图像中寻找标签
+        @note: 输入图像应当仅包含一个标签
+        @return: minAreaRect
+        '''
         # 使用HSV提取标签所在色块
         hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV_FULL)
         mask = cv2.inRange(hsv, np.array([h_min, s_min, v_min]), np.array([h_max, s_max, v_max]))
@@ -37,22 +37,22 @@ class LabelChecker():
         return max_area_rect
 
 
-    '''
-    @brief: 从图像中寻找所有标签
-    @param:
-        - img: 输入图像
-        - template_w: 模板宽度
-        - template_h: 模板高度
-        - wh_tol_ratio: 容许的长宽误差比例
-        - ed_kernel_size: 腐蚀膨胀核大小
-        - ed_iterations: 腐蚀膨胀代数
-    @return: minAreaRect
-    '''
     def find_labels(self, 
         img, template_w:int, template_h:int,
         h_min:int, h_max:int, s_min:int, s_max:int, v_min:int, v_max:int,
         wh_tol_ratio:float = 0.1, show_mask:bool = False
     ):
+        '''
+        @brief: 从图像中寻找所有标签
+        @param:
+            - img: 输入图像
+            - template_w: 模板宽度
+            - template_h: 模板高度
+            - wh_tol_ratio: 容许的长宽误差比例
+            - ed_kernel_size: 腐蚀膨胀核大小
+            - ed_iterations: 腐蚀膨胀代数
+        @return: minAreaRect
+        '''
         # 使用HSV提取标签所在色块
         hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV_FULL)
         mask = cv2.inRange(hsv, np.array([h_min, s_min, v_min]), np.array([h_max, s_max, v_max]))
@@ -76,10 +76,10 @@ class LabelChecker():
         return rects
 
 
-    '''
-    @brief: 该函数主要用于检测标签的 minAreaRect 倾角是否小于30
-    '''
     def check_min_aera_rect(self, min_area_rect) -> bool:
+        '''
+        @brief: 该函数主要用于检测标签的 minAreaRect 倾角是否小于30
+        '''
         angle = min_area_rect[2]
         if(abs(angle) > 30 and abs(angle) < 60):
             return False
@@ -87,12 +87,12 @@ class LabelChecker():
             return True
 
 
-    """
-    @brief: 将min_area_rect转换为四个顶点, 横方向为长边并且输出顺序为: [左上 右上 左下 右下],
-    @return:
-        - 横方向为长边并且输出list为[左上 右上 左下 右下]
-    """
     def _get_box_point(self, min_area_rect) -> list:
+        """
+        @brief: 将min_area_rect转换为四个顶点, 横方向为长边并且输出顺序为: [左上 右上 左下 右下],
+        @return:
+            - 横方向为长边并且输出list为[左上 右上 左下 右下]
+        """
         # cv2.boxPoints得到的四个点一定是按照顺时针排序的
         points = cv2.boxPoints(min_area_rect)
 
@@ -128,11 +128,11 @@ class LabelChecker():
         return result
 
 
-    '''
-    @brief: 将 minAreaRect 所在区域仿射并裁切到长方形
-    @note: 该函数会自动将图像旋转到正确的方向
-    '''
     def wrap_min_aera_rect(self, src, min_area_rect):
+        '''
+        @brief: 将 minAreaRect 所在区域仿射并裁切到长方形
+        @note: 该函数会自动将图像旋转到正确的方向
+        '''
         # 提取w、h
         w = min_area_rect[1][0]
         h = min_area_rect[1][1]
@@ -162,18 +162,18 @@ class LabelChecker():
         return cv2.warpPerspective(src, matrix, (int(w), int(h)))
 
 
-    """
-    @brief: 将经过仿射变换的标签图像转化为样式二值图
-    @param:
-        - wraped_img: 仿射后的图像
-        - threshold: 黑度阈值(255: 最黑, 0: 最亮)
-        - shielded_areas: 需要屏蔽的区域, 在这些区域内的样式二值图会被覆盖为黑色(即屏蔽对应区域)。为list类型, 数据结构定义如下: 
-            [
-                (x1, y1, x2, y2),
-                (...)
-            ]
-    """
     def get_pattern(self, wraped_img, threshold:int, shielded_areas:list=None):
+        """
+        @brief: 将经过仿射变换的标签图像转化为样式二值图
+        @param:
+            - wraped_img: 仿射后的图像
+            - threshold: 黑度阈值(255: 最黑, 0: 最亮)
+            - shielded_areas: 需要屏蔽的区域, 在这些区域内的样式二值图会被覆盖为黑色(即屏蔽对应区域)。为list类型, 数据结构定义如下: 
+                [
+                    (x1, y1, x2, y2),
+                    (...)
+                ]
+        """
         # 1. 将图像反色
         target_wraped_reversed = cv2.bitwise_not(wraped_img)
 
@@ -257,14 +257,14 @@ class LabelChecker():
         return trans
 
 
-    '''
-    @brief: 将待测图像以指定线性变换匹配到标准图像上, 用于二值图匹配
-    @param:
-        - img1: 待变换的图像
-        - img2: 欲匹配的图像
-    @return: 未能匹配的像素数量
-    '''
     def try_match(self, img1, img2, x:int, y:int, angle, shielded_areas:list=None, show_diff = False) -> int:
+        '''
+        @brief: 将待测图像以指定线性变换匹配到标准图像上, 用于二值图匹配
+        @param:
+            - img1: 待变换的图像
+            - img2: 欲匹配的图像
+        @return: 未能匹配的像素数量
+        '''
         # 线性变换
         trans = self.linear_trans_to(img1, x, y, angle, [img2.shape[1], img2.shape[0]], 0)
         # 对选定区域进行屏蔽
