@@ -288,18 +288,19 @@ class MainWorkingFlow():
         - 
         - thickness_tol: [只读参数], 容许的粗细误差
     @return:
-        - [ 二值图样式, 二值图对应的彩色图 ]
+        - [ 滤波后误差图, 二值图样式, 二值图对应的彩色图, 高精误差图 ]
     @note: 
         本函数未来会做为并行运算的方法使用
     """
     def _match_label(self, 
         template_pattern, target_img, target_rect, threshold:int, shielded_areas:list,
-        initial_minimum_simi:float = 0.01, thickness_tol:int = 3
+        initial_minimum_simi:float = 0.01, thickness_tol:int = 3,
+        gen_high_pre_diff:bool = False
     ):
         # 1. 将模板标签仿射回标准视角
         target_wraped = self._checker.wrap_min_aera_rect(target_img, target_rect)
 
-        # 2. 获取样式
+        # 2. 获取待检图像原始样式
         pattern = self._checker.get_pattern(target_wraped, threshold)
 
         # 3. 监测相似度是否超标
@@ -330,16 +331,31 @@ class MainWorkingFlow():
             img=pattern, x=x, y=y, angle=angle, output_size=[template_pattern.shape[1], template_pattern.shape[0]], border_color=0
         )
 
+        # 7. 将模板分区微调到微调后的待测样式
+        matched_template_pattern = self._checker.match_template_to_target_partitioned(
+            template_pattern=template_pattern.copy(),
+            target_pattern=target_pattern.copy(),
+            shielded_areas=shielded_areas,
+        )
+        #timestamp = str(time.time())
+        #cv2.imwrite("../temp/id%dtemplate%s.jpg"%(id, timestamp), result)
+        #cv2.imwrite("../temp/id%dpattern%s.jpg"%(id, timestamp), pattern)
+
         # 7. 获得误差图像
-        target_remain = self._checker.cut_with_tol(template_pattern, target_pattern, thickness_tol, shielded_areas)
-        template_remain = self._checker.cut_with_tol(target_pattern, template_pattern, thickness_tol, shielded_areas)
+        target_remain = self._checker.cut_with_tol(matched_template_pattern, target_pattern, thickness_tol, shielded_areas)
+        template_remain = self._checker.cut_with_tol(target_pattern, matched_template_pattern, thickness_tol, shielded_areas)
         diff = cv2.bitwise_or(target_remain, template_remain)
+        high_pre_diff = None
+        if(gen_high_pre_diff):
+            target_remain = self._checker.cut_with_tol(matched_template_pattern, target_pattern, 0, shielded_areas)
+            template_remain = self._checker.cut_with_tol(target_pattern, matched_template_pattern, 0, shielded_areas)
+            high_pre_diff = cv2.bitwise_or(target_remain, template_remain)
 
         # 8. 计算线性变换后原图
         target_trans = self._checker.linear_trans_to(
             img=target_wraped, x=x, y=y, angle=angle, output_size=[template_pattern.shape[1], template_pattern.shape[0]], border_color=[255, 255, 255]
         )
-        return [ diff, target_trans, target_pattern ]
+        return [ diff, target_trans, target_pattern, high_pre_diff ]
 
 
 
@@ -452,14 +468,15 @@ class MainWorkingFlow():
                 target_result = {}
                 target_num = len(rects)
                 for r in rects:
-                    # 匹配标签并获得缺陷图
-                    diff, target_trans, pattern = self._match_label( 
+                    # 1. 匹配标签并获得缺陷图
+                    diff, target_trans, pattern, high_pre_diff = self._match_label( 
                         template_pattern=template_pattern,
                         target_img=target_img,
                         target_rect=r,
                         threshold=params.depth_threshold,
                         shielded_areas=template_shielded_areas,
-                        thickness_tol=params.linear_error
+                        thickness_tol=params.linear_error,
+                        gen_high_pre_diff=True
                     )
 
                     # 计算误差
@@ -467,6 +484,7 @@ class MainWorkingFlow():
                     ## 判断阈值
                     similarity = (template_pattern_size - loss)/float(template_pattern_size)
                     logging.info("label: %d, final_loss: %d, similarity: %f"%(id, loss, similarity))
+
                     ## 绘制方框
                     if(similarity * 100 < params.class_similarity):
                         # 不同类标签
@@ -488,10 +506,6 @@ class MainWorkingFlow():
                         color=(0, 0, 255), 
                         thickness=2
                     )
-
-                    # TODO: delete
-                    cv2.imwrite("../img/target_trans" + str(time.time()) + ".jpg", target_trans)
-
 
                     # 绘制误差点并输出图像
                     if(similarity * 100 > params.class_similarity):
@@ -515,11 +529,9 @@ class MainWorkingFlow():
                         target_result["id: " + str(id) + " diff"] = diff_bgr
 
                         # 高精度误差图
-                        target_remain = self._checker.cut_with_tol(template_pattern, pattern, 0, template_shielded_areas)
-                        template_remain = self._checker.cut_with_tol(pattern, template_pattern, 0, template_shielded_areas)
-                        diff_high_pre = cv2.bitwise_or(target_remain, template_remain)
-                        diff_high_pre_bgr = cv2.cvtColor(diff_high_pre, cv2.COLOR_GRAY2BGR)
-                        target_result["id: " + str(id) + " high diff"] = diff_high_pre_bgr
+                        if(high_pre_diff is not None):
+                            diff_high_pre_bgr = cv2.cvtColor(high_pre_diff, cv2.COLOR_GRAY2BGR)
+                            target_result["id: " + str(id) + " high diff"] = diff_high_pre_bgr
 
                         pattern_bgr = cv2.cvtColor(pattern, cv2.COLOR_GRAY2BGR)
                         target_result["id: " + str(id) + " pattern"] = pattern_bgr

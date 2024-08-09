@@ -204,22 +204,22 @@ class LabelChecker():
         return target_pattern
 
 
-    '''
-    @brief: 将图像进行线性变换, 边缘用黑色填充
-    @param:
-        - img: 待变换图像
-        - x: x轴offset
-        - y: y轴offset
-        - angle: 旋转角
-        - output_size: 输出图像大小, 默认为原大小, 保持中心对齐。大则裁切小则填充。
-            output_size[0]: w
-            output_size[1]: h
-            若 output_size = [-1, -1] 则不改变输出图像大小
-        - border_color: 边缘填充颜色, 注意图像维度, 三色图应为 [B, G, R], 单色图为 value
-    @return:
-        线性变换并保持中心对齐后, 经过裁切或填充的图像。
-    '''
     def linear_trans_to(self, img, x:int, y:int, angle:float, output_size:list = [-1, -1], border_color = [0, 0, 0]):
+        '''
+        @brief: 将图像进行线性变换, 边缘用黑色填充
+        @param:
+            - img: 待变换图像
+            - x: x轴offset
+            - y: y轴offset
+            - angle: 旋转角
+            - output_size: 输出图像大小, 默认为原大小, 保持中心对齐。大则裁切小则填充。
+                output_size[0]: w
+                output_size[1]: h
+                若 output_size = [-1, -1] 则不改变输出图像大小
+            - border_color: 边缘填充颜色, 注意图像维度, 三色图应为 [B, G, R], 单色图为 value
+        @return:
+            线性变换并保持中心对齐后, 经过裁切或填充的图像。
+        '''
         if(output_size == [-1, -1]):
             output_size[0] = img.shape[1]
             output_size[1] = img.shape[0]
@@ -232,8 +232,8 @@ class LabelChecker():
         ori_hypo = math.ceil(math.sqrt(pow(ori_w, 2) + pow(ori_h, 2)))
 
         # 为待测图像扩展黑边
-        border_w = math.ceil((ori_hypo - ori_w) / 2) + x
-        border_h = math.ceil((ori_hypo - ori_h) / 2) + y
+        border_w = math.ceil((ori_hypo - ori_w) / 2) + abs(x)
+        border_h = math.ceil((ori_hypo - ori_h) / 2) + abs(y)
         test_ext = cv2.copyMakeBorder(img, border_h, border_h, border_w, border_w, cv2.BORDER_CONSTANT, value=border_color)
         ext_w = test_ext.shape[1]
         ext_h = test_ext.shape[0]
@@ -282,26 +282,27 @@ class LabelChecker():
         return loss
 
 
-    '''
-    @brief: 将待测图像(test)通过线性变换微调到模板(std)上。
-    @param:
-        - test
-        - std
-        - max_abs_x: x轴最大微调像素数(绝对值)
-        - max_abs_y: y轴最大微调像素数(绝对值)
-        - max_abs_a: 最大旋转角角度数(绝对值)
-        - max_iterations: 最大微调迭代数
-        - angle_step: 每步角度微调幅度
-        - view_size: 视野边距: 
-            例如边距为为1时, 对应视野矩阵为3x3, 视野行向量长度为3
-            例如边距为为2时, 对应视野矩阵为5x5, 视野行向量长度为5
-    @return:
-        best param in [x, y, angle]
-    @note: 本函数只能处理微小误差(半行以内), 即初始时应当已几乎匹配
-    '''
+
     def fine_tune(self, test, std, max_abs_x:int, max_abs_y:int, max_abs_a:float, max_iterations, 
         shielded_areas:list=None, angle_step = 0.1, view_size:int = 2, show_process:bool = False
     ):
+        '''
+        @brief: 将待测图像(test)通过线性变换微调到模板(std)上。
+        @param:
+            - test
+            - std
+            - max_abs_x: x轴最大微调像素数(绝对值)
+            - max_abs_y: y轴最大微调像素数(绝对值)
+            - max_abs_a: 最大旋转角角度数(绝对值)
+            - max_iterations: 最大微调迭代数
+            - angle_step: 每步角度微调幅度
+            - view_size: 视野边距: 
+                例如边距为为1时, 对应视野矩阵为3x3, 视野行向量长度为3
+                例如边距为为2时, 对应视野矩阵为5x5, 视野行向量长度为5
+        @return:
+            best param in [x, y, angle]
+        @note: 本函数只能处理微小误差(半行以内), 即初始时应当已几乎匹配
+        '''
         iterations = 0
         # 初始值与现值
         curr_x = 0
@@ -516,3 +517,56 @@ class LabelChecker():
             for area in shielded_areas:
                 remain = cv2.rectangle(remain, (area[0], area[1]), (area[2], area[3]), 0, thickness=cv2.FILLED)
         return remain
+
+
+    def match_template_to_target_partitioned(self, template_pattern, target_pattern, shielded_areas:list=None):
+        """
+        @brief: 将模板分区匹配到目标样式上, 并返回分区匹配后的结果
+        @param:
+            - template_pattern: 模板样式, 要求二值图
+            - target_pattern: 待检图像样式, 要求二值图
+            - shielded_areas: 屏蔽区域列表
+        @return: 将模板分区匹配到待检图像后的结果
+        """
+        # 1. 先屏蔽待检区域
+        if(isinstance(shielded_areas, list)):
+            for area in shielded_areas:
+                # 执行屏蔽
+                template_pattern = cv2.rectangle(template_pattern, (area[0], area[1]), (area[2], area[3]), 0, thickness=cv2.FILLED)
+                target_pattern  = cv2.rectangle(target_pattern, (area[0], area[1]), (area[2], area[3]), 0, thickness=cv2.FILLED)
+
+        # 2. 做逻辑与操作, 寻找单个闭合区域
+        closed_pattern = cv2.bitwise_or(template_pattern, target_pattern)
+
+        # 3. 逐个遍历闭合区域, 并进行分区匹配
+        result = np.zeros((target_pattern.shape[0], target_pattern.shape[1]), np.uint8)
+        ## 3.1 寻找闭合区域时只检测外围轮廓
+        contours, hierarchy = cv2.findContours(closed_pattern, mode=cv2.RETR_EXTERNAL, method=cv2.CHAIN_APPROX_NONE)
+        for c in contours:
+            x, y, w, h = cv2.boundingRect(c)
+            ## 3.2 分区域进行fine_tune
+            template_partition = template_pattern[y : y + h, x : x + w]
+            target_partition = target_pattern[y : y + h, x : x + w]
+            logging.debug("shape: " + str(template_partition.shape))
+            offset = self.fine_tune(
+                test=template_partition,
+                std=target_partition,
+                max_abs_x=7,
+                max_abs_y=7,
+                max_abs_a=1.0,
+                max_iterations=10,
+                angle_step=0.0005,
+                view_size=15,
+            )
+
+            ## 3.3 将fine_tune结果拼回总图
+            result[y : y + h, x : x + w] = self.linear_trans_to(
+                img=template_partition,
+                x=offset[0],
+                y=offset[1],
+                angle=offset[2],
+                output_size=(w, h),
+                border_color=0
+            )
+
+        return result
