@@ -80,7 +80,8 @@ class CheckerUIParams():
         not_good_similarity:int = 95, linear_error:int = 7,
         defect_min_area:int = 6,
         export_defeats:bool = True, export_pattern:bool = False,
-        export_diff:bool = False, export_high_pre_diff:bool = False
+        export_diff:bool = False, export_high_pre_diff:bool = False,
+        export_matched_template:bool = False
     ) -> None:
         self.h_min = h_min
         self.h_max = h_max
@@ -96,6 +97,7 @@ class CheckerUIParams():
         self.export_pattern = export_pattern
         self.export_diff = export_diff
         self.export_high_pre_diff = export_high_pre_diff
+        self.export_matched_template = export_matched_template
 
 
 class LabelCheckerUI(Ui_LabelChecker, QWidget):
@@ -225,7 +227,7 @@ class LabelCheckerUI(Ui_LabelChecker, QWidget):
         self.ExportPatternCheckBox.stateChanged.connect(lambda: self._check_box_changed_callback(self.ExportPatternCheckBox))
         self.ExportDiffCheckBox.stateChanged.connect(lambda: self._check_box_changed_callback(self.ExportDiffCheckBox))
         self.ExportHighPreDiffCheckBox.stateChanged.connect(lambda: self._check_box_changed_callback(self.ExportHighPreDiffCheckBox))
-        #self.ExportMatchedTemplateCheckBox
+        self.ExportMatchedTemplateCheckBox.stateChanged.connect(lambda: self._check_box_changed_callback(self.ExportMatchedTemplateCheckBox))
         
 
     def _connect_param_widgets_signal(self, param_widget_map:dict):
@@ -256,11 +258,13 @@ class LabelCheckerUI(Ui_LabelChecker, QWidget):
             case self.ExportDefectsCheckBox:
                 self._param.export_defeats = self.ExportDefectsCheckBox.isChecked()
             case self.ExportPatternCheckBox:
-                self._param.export_pattern = self.ExportDefectsCheckBox.isChecked()
+                self._param.export_pattern = self.ExportPatternCheckBox.isChecked()
             case self.ExportDiffCheckBox:
-                self._param.export_diff = self.ExportDefectsCheckBox.isChecked()
+                self._param.export_diff = self.ExportDiffCheckBox.isChecked()
             case self.ExportHighPreDiffCheckBox:
-                self._param.export_high_pre_diff = self.ExportDefectsCheckBox.isChecked()
+                self._param.export_high_pre_diff = self.ExportHighPreDiffCheckBox.isChecked()
+            case self.ExportMatchedTemplateCheckBox:
+                self._param.export_matched_template = self.ExportMatchedTemplateCheckBox.isChecked()
         self._param_callback(self._param)
 
 

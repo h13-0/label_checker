@@ -303,7 +303,7 @@ class MainWorkingFlow():
         - 
         - thickness_tol: [只读参数], 容许的粗细误差
     @return:
-        - [ 滤波后误差图, 二值图样式, 二值图对应的彩色图, 高精误差图 ]
+        - [ 滤波后误差图, 二值图样式, 二值图对应的彩色图, 高精误差图, 匹配后的模板图 ]
     @note: 
         本函数未来会做为并行运算的方法使用
     """
@@ -367,7 +367,7 @@ class MainWorkingFlow():
         target_trans = self._checker.linear_trans_to(
             img=target_wraped, x=x, y=y, angle=angle, output_size=[template_pattern.shape[1], template_pattern.shape[0]], border_color=[255, 255, 255]
         )
-        return [ diff, target_trans, target_pattern, high_pre_diff ]
+        return [ diff, target_trans, target_pattern, high_pre_diff, matched_template_pattern ]
 
 
 
@@ -499,7 +499,7 @@ class MainWorkingFlow():
                 target_num = len(rects)
                 for r in rects:
                     # 1. 匹配标签并获得缺陷图
-                    diff, target_trans, pattern, high_pre_diff = self._match_label( 
+                    diff, target_trans, pattern, high_pre_diff, matched_template_pattern = self._match_label( 
                         template_pattern=template_pattern,
                         target_img=target_img,
                         target_rect=r,
@@ -582,8 +582,9 @@ class MainWorkingFlow():
                         if(high_pre_diff is not None):
                             diff_high_pre_bgr = cv2.cvtColor(high_pre_diff, cv2.COLOR_GRAY2BGR)
                             target_result["id: " + str(id) + " high diff"] = diff_high_pre_bgr
-
-
+                        if(params.export_matched_template):
+                            matched_template_pattern_bgr = cv2.cvtColor(matched_template_pattern, cv2.COLOR_GRAY2BGR)
+                            target_result["id: " + str(id) + " matched template"] = matched_template_pattern_bgr
 
 
                     # 输出进度到进度条
