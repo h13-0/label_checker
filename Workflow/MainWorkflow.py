@@ -77,6 +77,13 @@ class MainWorkingFlow():
         # 刷新模板列表
         self._refresh_templates()
 
+        # 准备加载yolo模型
+        self._detector = None
+        ## TODO: 可选加载yolo模型
+        if(True):
+            from LabelChecker.LabelChecker import InkDefectDetector
+            self._detector = InkDefectDetector("./weights/yolo.onnx")
+
 
     def _refresh_templates(self):
         """
@@ -103,25 +110,31 @@ class MainWorkingFlow():
     @brief: 创建模板编辑器的回调
     """
     def _create_editor_cb(self):
-        # 回调函数一定为主线程, 因此可以操作UI
-        if(self._template_id != 0):
-            self._editor = TemplateEditor(
-                config=self._config, 
-                parent=self._ui,
-                template_name=self._template_name,
-                template_list=[]
-            )
-        else:
-            self._editor = TemplateEditor(
-                config=self._config, 
-                parent=self._ui,
-                template_name="",
-                template_list=[]
-            )
-        self._editor.set_exit_callback(lambda: self._refresh_templates())
-        self._editor.show()
-        self._editor.run()
-        
+        if(self._editor is None):
+            # 回调函数一定为主线程, 因此可以操作UI
+            if(self._template_id != 0):
+                self._editor = TemplateEditor(
+                    config=self._config, 
+                    parent=self._ui,
+                    template_name=self._template_name,
+                    template_list=[]
+                )
+            else:
+                self._editor = TemplateEditor(
+                    config=self._config, 
+                    parent=self._ui,
+                    template_name="",
+                    template_list=[]
+                )
+            self._editor.set_exit_callback(self._editor_exit_callback)
+            self._editor.show()
+            self._editor.run()
+    
+
+    def _editor_exit_callback(self):
+        self._editor = None
+        self._refresh_templates()
+
 
     """
     @brief: 调用文件选择对话框选择文件
@@ -437,6 +450,9 @@ class MainWorkingFlow():
                         # 目标需要更新
                         target_img = self._img_dict["待检图像"].copy()
 
+                ## 重置进度条
+                self._ui.set_progress_bar_value(ProgressBarWidgts.CompareProgressBar, 0)
+
                 ## 检查运行条件是否满足
                 if(not isinstance(template_img, np.ndarray)):
                     continue
@@ -444,8 +460,11 @@ class MainWorkingFlow():
                 if(not isinstance(target_img, np.ndarray)):
                     continue
 
-                ## 重置进度条
-                self._ui.set_progress_bar_value(ProgressBarWidgts.CompareProgressBar, 0)
+                ## 将待检图像输出到UI
+                self._ui.set_graphic_widget(target_img, GraphicWidgets.MainGraphicView)
+
+                ## 将进度条设置为1%表示已经开始运行
+                self._ui.set_progress_bar_value(ProgressBarWidgts.CompareProgressBar, 1)
 
                 ## 开始对待检图像进行图像处理 TODO
                 rects = self._find_labels(
@@ -509,7 +528,7 @@ class MainWorkingFlow():
 
                     # 绘制误差点并输出图像
                     if(similarity * 100 > params.class_similarity):
-                        # 同类标签中绘制误差点
+                        ## 1. 同类标签中绘制误差点
                         contours, hierarchy = cv2.findContours(diff, mode=cv2.RETR_TREE, method=cv2.CHAIN_APPROX_NONE)
                         for c in contours:
                             x, y, w, h = cv2.boundingRect(c)
@@ -523,6 +542,23 @@ class MainWorkingFlow():
                                     box_thickness
                                 )
                             logging.debug("label: %d, defect size: %d"%(id, w * h))
+                        
+                        ## 2. 检测断墨缺陷
+                        ink_defects = []
+                        if(self._detector):
+                            ink_defects = self._detector.detect(target_trans)
+                            for defect in ink_defects:
+                                [x, y, w, h, confidence, cls] = defect
+                                if(confidence > 0.2):
+                                    logging.debug(defect)
+                                    target_trans = cv2.rectangle(
+                                        target_trans, 
+                                        (round(x - box_thickness - w / 2), round(y - box_thickness - h / 2)), 
+                                        (round(x + box_thickness + w / 2), round(y + box_thickness + h / 2)), 
+                                        (0, 0, 255), 
+                                        box_thickness
+                                    )
+
                         # show
                         target_result["id: " + str(id)] = target_trans
                         diff_bgr = cv2.cvtColor(diff, cv2.COLOR_GRAY2BGR)
@@ -540,7 +576,9 @@ class MainWorkingFlow():
                     # 输出进度到进度条
                     self._ui.set_progress_bar_value(ProgressBarWidgts.CompareProgressBar, int((id + 1) * 100 / target_num))
                     id += 1
-                
+                # 将进度条置为100%
+                self._ui.set_progress_bar_value(ProgressBarWidgts.CompareProgressBar, 100)
+
                 # 在操作ui之前确保程序没有被退出
                 if(not self._stop_event.is_set()):
                     self._ui.set_graphic_detail_list(target_result)

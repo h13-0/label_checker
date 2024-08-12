@@ -1,8 +1,13 @@
 from QtUI.Ui_LabelChecker import Ui_LabelChecker
+
+import time
+
+from copy import deepcopy
+
 from PyQt6 import QtCore, QtWidgets
 from PyQt6.QtCore import pyqtSignal, Qt, QEvent
-from PyQt6.QtWidgets import QWidget, QGraphicsScene, QGraphicsPixmapItem, QVBoxLayout, QMessageBox, QApplication, QMainWindow
-from PyQt6.QtGui import QPixmap, QImage
+from PyQt6.QtWidgets import QWidget, QGraphicsScene, QGraphicsPixmapItem, QVBoxLayout, QMessageBox, QApplication, QMenu, QFileDialog
+from PyQt6.QtGui import QPixmap, QImage, QAction, QCursor
 import logging
 from enum import Enum
 import cv2
@@ -163,8 +168,9 @@ class LabelCheckerUI(Ui_LabelChecker, QWidget):
             )
             self._graphic_widgets[widgets].setDragMode(QtWidgets.QGraphicsView.DragMode.ScrollHandDrag)
 
-        # "图像详情列表"的GroupBox、GraphicView及GraphicsScene
+        # "图像详情列表"的GroupBox、images、GraphicView及GraphicsScene
         self._graphic_details_group_box_list = []
+        self._graphic_details_cv_image_list = []
         self._graphic_details_graphic_view_list = []
         self._graphic_details_graphic_scene_list = []
 
@@ -316,16 +322,36 @@ class LabelCheckerUI(Ui_LabelChecker, QWidget):
         self.TemplatesComboBox.clear()
 
 
-    """
-    @brief: 设置 "图像详情列表" 元素的槽函数
-    @param:
-        - details:
-            {
-                "title": QImage
-            }
-    """
+    def _img_save_callback(self, id:int):
+        destpath, filetype = QFileDialog.getSaveFileName(self, "文件图像", str(time.time()) + ".jpg", "JPEG图像 (*.jpg)")
+        logging.info(id)
+        if((destpath is not None) and len(destpath)):
+            try:
+                self._graphic_details_cv_image_list[id].save(destpath)
+            except Exception as e:
+                logging.error(e)
+    
+
+    def _create_graphic_detail_menu(self, graphic_view:QtWidgets.QGraphicsView, id:int):
+        menu = QMenu(graphic_view)
+        action = QAction("保存", graphic_view)
+        action.triggered.connect(lambda:self._img_save_callback(id))
+        menu.addAction(action)
+        menu.popup(QCursor.pos())
+
+
     def _set_graphic_detail_content(self, details:dict):
+        """
+        @brief: 设置 "图像详情列表" 元素的槽函数
+        @param:
+            - details:
+                {
+                    "title": QImage
+                }
+        """
         # 清除UI中所有现存图像
+        self._graphic_details_cv_image_list = []
+
         for view in self._graphic_details_graphic_view_list:
             view.deleteLater()
         self._graphic_details_graphic_view_list = []
@@ -340,8 +366,12 @@ class LabelCheckerUI(Ui_LabelChecker, QWidget):
         self._graphic_details_group_box_list = []
 
         # 绘制新图像
+        id = 0
         for title in details:
             img = details[title]
+
+            # 将图像添加到list
+            self._graphic_details_cv_image_list.append(img)
 
             box_w = self.GraphicDetialList.width() - 30
             box_h = int((self.GraphicDetialList.width() / img.width()) * img.height()) + 30
@@ -367,12 +397,19 @@ class LabelCheckerUI(Ui_LabelChecker, QWidget):
             graphic_view.wheelEvent = MethodType(self._wheel_event, graphic_view)
             graphic_view.setDragMode(QtWidgets.QGraphicsView.DragMode.ScrollHandDrag)
             self._graphic_details_graphic_view_list.append(graphic_view)
+            ## 为GraphicView创建右键菜单
+            graphic_view.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+            graphic_view.customContextMenuRequested.connect(
+                lambda point, gv=graphic_view, i=id:self._create_graphic_detail_menu(graphic_view=gv, id=i)
+            )
         
             pixmap = QPixmap.fromImage(img)
             pixmap_item = QGraphicsPixmapItem(pixmap)
             scene.clear()
             scene.addItem(pixmap_item)
             scene.update()
+
+            id += 1
 
 
     """

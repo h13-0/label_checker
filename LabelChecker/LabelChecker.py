@@ -3,6 +3,7 @@ import cv2
 import math
 import logging
 
+
 class LabelChecker():
     def __init__(self) -> None:
         pass
@@ -556,7 +557,7 @@ class LabelChecker():
                 max_abs_a=1.0,
                 max_iterations=10,
                 angle_step=0.0005,
-                view_size=15,
+                view_size=10,
             )
 
             ## 3.3 将fine_tune结果拼回总图
@@ -570,3 +571,43 @@ class LabelChecker():
             )
 
         return result
+
+
+class InkDefectDetector():
+    def __init__(self, path:str) -> None:
+        import onnxruntime as ort
+        self._sesson = ort.InferenceSession(path)
+
+
+    def detect(self, img) -> list:
+        """
+        @brief: 
+        @return: [x, y, w, h, confidence, class] 构成的列表
+        """
+        ori_w = img.shape[1]
+        ori_h = img.shape[0]
+        ori_img = cv2.resize(img, (640, 640))
+        img = ori_img[:, :, ::-1].transpose(2, 0, 1)
+        img = img.astype(dtype=np.float32)
+        img /= 255.0
+        img = np.expand_dims(img, axis=0)
+
+        input_name = self._sesson.get_inputs()[0].name
+        output_names = [o.name for o in self._sesson.get_outputs()]
+        detections = self._sesson.run(output_names, {input_name: img})[0]
+
+        scale_x = float(ori_w) / 640
+        scale_y = float(ori_h) / 640
+
+        for i in range(len(detections[0])):
+            x, y, w, h, confidence, cls = detections[0][i]
+            cls = round(cls)
+            x *= scale_x
+            y *= scale_y
+            w *= scale_x
+            h *= scale_y
+            detections[0][i] = [x, y, w, h, confidence, cls]
+
+        return detections[0]
+    
+    

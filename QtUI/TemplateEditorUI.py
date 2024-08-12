@@ -15,7 +15,6 @@ from PyQt6.QtWidgets import QWidget, QGraphicsScene, QGraphicsPixmapItem, QGraph
 from PyQt6.QtGui import QPixmap, QImage, QColor, QStandardItemModel, QStandardItem
 
 from QtUI.Widgets.DraggableResizableRect import DraggableResizableRect
-from Template.Template import Template
 from Utils.Config import Config
 
 
@@ -45,6 +44,7 @@ class ShieldedArea():
     
     def get_widget(self) -> DraggableResizableRect:
         return self._widget
+
 
     def get_id(self) -> int:
         return self._id
