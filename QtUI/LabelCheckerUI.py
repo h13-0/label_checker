@@ -225,6 +225,7 @@ class LabelCheckerUI(Ui_LabelChecker, QWidget):
         self.ExportPatternCheckBox.stateChanged.connect(lambda: self._check_box_changed_callback(self.ExportPatternCheckBox))
         self.ExportDiffCheckBox.stateChanged.connect(lambda: self._check_box_changed_callback(self.ExportDiffCheckBox))
         self.ExportHighPreDiffCheckBox.stateChanged.connect(lambda: self._check_box_changed_callback(self.ExportHighPreDiffCheckBox))
+        #self.ExportMatchedTemplateCheckBox
         
 
     def _connect_param_widgets_signal(self, param_widget_map:dict):

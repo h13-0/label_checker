@@ -574,19 +574,25 @@ class LabelChecker():
 
 
 class InkDefectDetector():
-    def __init__(self, path:str) -> None:
+    def __init__(self, path:str, img_sz:int) -> None:
         import onnxruntime as ort
         self._sesson = ort.InferenceSession(path)
+        self._img_sz = img_sz
 
 
-    def detect(self, img) -> list:
+    def detect(self, img, confidence_thre:float = 0.2, template_defects:list = []) -> list:
         """
-        @brief: 
+        @brief: 检测待检图像的断墨缺陷
+        @param:
+            - img: opencv的BGR图像
+            - template_defects: 
+                - [x, y, w, h, confidence, class] 构成的列表
+                - 模板图像的标定缺陷, 用于排除模板自带的缺陷, 以及追加模板自带但待测图像不带的缺陷
         @return: [x, y, w, h, confidence, class] 构成的列表
         """
         ori_w = img.shape[1]
         ori_h = img.shape[0]
-        ori_img = cv2.resize(img, (640, 640))
+        ori_img = cv2.resize(img, (self._img_sz, self._img_sz))
         img = ori_img[:, :, ::-1].transpose(2, 0, 1)
         img = img.astype(dtype=np.float32)
         img /= 255.0
@@ -596,18 +602,62 @@ class InkDefectDetector():
         output_names = [o.name for o in self._sesson.get_outputs()]
         detections = self._sesson.run(output_names, {input_name: img})[0]
 
-        scale_x = float(ori_w) / 640
-        scale_y = float(ori_h) / 640
+        scale_x = float(ori_w) / self._img_sz
+        scale_y = float(ori_h) / self._img_sz
 
+        defects = []
+
+        # 滤掉conf过低的数据, 并将cls转换为int
         for i in range(len(detections[0])):
             x, y, w, h, confidence, cls = detections[0][i]
-            cls = round(cls)
-            x *= scale_x
-            y *= scale_y
-            w *= scale_x
-            h *= scale_y
-            detections[0][i] = [x, y, w, h, confidence, cls]
+            if(confidence > confidence_thre):
+                cls = round(cls)
+                x *= scale_x
+                y *= scale_y
+                w *= scale_x
+                h *= scale_y
+                defects.append([x, y, w, h, confidence, cls])
 
-        return detections[0]
-    
+        if(len(template_defects)):
+            # 为defects补充template中有但是img中没有的缺陷
+            img_lost = []
+            for defect in template_defects:
+                x, y, w, h, confidence, cls = defect
+                lost = True
+                for out in defects:
+                    out_x, out_y, out_w, out_h, out_conf, out_cls = out
+                    if(
+                        x <= out_x + out_w / 2 and
+                        x >= out_x - out_w / 2 and
+                        y <= out_y + out_h / 2 and
+                        y >= out_y - out_h / 2
+                    ):
+                        # 未丢失
+                        lost = False
+                        break
+                if(lost):
+                    img_lost.append(out)
+
+            # 忽略defects中与template中重复的元素
+            output = img_lost
+            for defect in defects:
+                x, y, w, h, confidence, cls = defect
+                duplicate = False
+                for temp_defect in template_defects:
+                    tem_x, tem_y, tem_w, tem_h, tem_conf, tem_cls = temp_defect
+                    if(
+                        x <= tem_x + tem_w / 2 and
+                        x >= tem_x - tem_w / 2 and
+                        y <= tem_y + tem_h / 2 and
+                        y >= tem_y - tem_h / 2
+                    ):
+                        # 发生重复
+                        duplicate = True
+                        break
+                if(not duplicate):
+                    output.append(defect)
+
+            return output
+        else:
+            return defects
     

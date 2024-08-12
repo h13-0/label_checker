@@ -477,6 +477,27 @@
         <property name="bottomMargin">
          <number>0</number>
         </property>
+        <item row="1" column="0">
+         <widget class="QCheckBox" name="ExportDiffCheckBox">
+          <property name="text">
+           <string>输出差异图(Debug)</string>
+          </property>
+         </widget>
+        </item>
+        <item row="0" column="1">
+         <widget class="QCheckBox" name="ExportPatternCheckBox">
+          <property name="text">
+           <string>输出标签样式(Debug)</string>
+          </property>
+         </widget>
+        </item>
+        <item row="1" column="1">
+         <widget class="QCheckBox" name="ExportHighPreDiffCheckBox">
+          <property name="text">
+           <string>输出高精差异图(Debug)</string>
+          </property>
+         </widget>
+        </item>
         <item row="0" column="0">
          <widget class="QCheckBox" name="ExportDefectsCheckBox">
           <property name="text">
@@ -487,24 +508,10 @@
           </property>
          </widget>
         </item>
-        <item row="0" column="1">
-         <widget class="QCheckBox" name="ExportPatternCheckBox">
+        <item row="2" column="0">
+         <widget class="QCheckBox" name="ExportMatchedTemplateCheckBox">
           <property name="text">
-           <string>输出标签打印样式(Debug)</string>
-          </property>
-         </widget>
-        </item>
-        <item row="1" column="0">
-         <widget class="QCheckBox" name="ExportDiffCheckBox">
-          <property name="text">
-           <string>输出差异图(Debug)</string>
-          </property>
-         </widget>
-        </item>
-        <item row="1" column="1">
-         <widget class="QCheckBox" name="ExportHighPreDiffCheckBox">
-          <property name="text">
-           <string>输出高精差异图(Debug)</string>
+           <string>输出匹配后模板图(Debug)</string>
           </property>
          </widget>
         </item>

@@ -84,7 +84,7 @@ class MainWorkingFlow():
         ## TODO: 可选加载yolo模型
         if(True):
             from LabelChecker.LabelChecker import InkDefectDetector
-            self._detector = InkDefectDetector("./weights/yolo.onnx")
+            self._detector = InkDefectDetector("./weights/yolo.onnx", img_sz=736)
 
 
     def _refresh_templates(self):
@@ -352,11 +352,8 @@ class MainWorkingFlow():
             target_pattern=target_pattern.copy(),
             shielded_areas=shielded_areas,
         )
-        #timestamp = str(time.time())
-        #cv2.imwrite("../temp/id%dtemplate%s.jpg"%(id, timestamp), result)
-        #cv2.imwrite("../temp/id%dpattern%s.jpg"%(id, timestamp), pattern)
 
-        # 7. 获得误差图像
+        # 8. 获得误差图像
         target_remain = self._checker.cut_with_tol(matched_template_pattern, target_pattern, thickness_tol, shielded_areas)
         template_remain = self._checker.cut_with_tol(target_pattern, matched_template_pattern, thickness_tol, shielded_areas)
         diff = cv2.bitwise_or(target_remain, template_remain)
@@ -366,7 +363,7 @@ class MainWorkingFlow():
             template_remain = self._checker.cut_with_tol(target_pattern, matched_template_pattern, 0, shielded_areas)
             high_pre_diff = cv2.bitwise_or(target_remain, template_remain)
 
-        # 8. 计算线性变换后原图
+        # 9. 计算线性变换后原图
         target_trans = self._checker.linear_trans_to(
             img=target_wraped, x=x, y=y, angle=angle, output_size=[template_pattern.shape[1], template_pattern.shape[0]], border_color=[255, 255, 255]
         )
@@ -438,8 +435,6 @@ class MainWorkingFlow():
                         template_pattern_size = cv2.countNonZero(template_pattern)
                         logging.debug("@main:template_pattern_size: %d"%(template_pattern_size))
 
-
-
                         template_w = template_wraped.shape[1]
                         template_h = template_wraped.shape[0]
                         # 在UI中更新图像
@@ -468,6 +463,20 @@ class MainWorkingFlow():
                 ## 将进度条设置为1%表示已经开始运行
                 self._ui.set_progress_bar_value(ProgressBarWidgts.CompareProgressBar, 1)
 
+                ## 生成模板缺陷标定列表
+                template_defects = self._detector.detect(template_wraped)
+                template_wraped_with_defect = template_wraped.copy()
+                for defect in template_defects:
+                    [x, y, w, h, confidence, cls] = defect
+                    template_wraped_with_defect = cv2.rectangle(
+                        template_wraped_with_defect, 
+                        (round(x - box_thickness - w / 2), round(y - box_thickness - h / 2)), 
+                        (round(x + box_thickness + w / 2), round(y + box_thickness + h / 2)), 
+                        (0, 255, 0), 
+                        box_thickness
+                    )
+                self._ui.set_graphic_widget(template_wraped_with_defect, GraphicWidgets.TemplateGraphicView)
+                
                 ## 开始对待检图像进行图像处理 TODO
                 rects = self._find_labels(
                     target_img,
@@ -548,18 +557,17 @@ class MainWorkingFlow():
                         ## 2. 检测断墨缺陷
                         ink_defects = []
                         if(self._detector):
-                            ink_defects = self._detector.detect(target_trans)
+                            ink_defects = self._detector.detect(target_trans, template_defects=template_defects)
                             for defect in ink_defects:
                                 [x, y, w, h, confidence, cls] = defect
-                                if(confidence > 0.2):
-                                    logging.debug(defect)
-                                    target_trans = cv2.rectangle(
-                                        target_trans, 
-                                        (round(x - box_thickness - w / 2), round(y - box_thickness - h / 2)), 
-                                        (round(x + box_thickness + w / 2), round(y + box_thickness + h / 2)), 
-                                        (0, 0, 255), 
-                                        box_thickness
-                                    )
+                                logging.debug(defect)
+                                target_trans = cv2.rectangle(
+                                    target_trans, 
+                                    (round(x - box_thickness - w / 2), round(y - box_thickness - h / 2)), 
+                                    (round(x + box_thickness + w / 2), round(y + box_thickness + h / 2)), 
+                                    (0, 0, 255), 
+                                    box_thickness
+                                )
 
                         # show
                         if(params.export_defeats):
