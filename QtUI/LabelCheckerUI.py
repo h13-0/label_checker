@@ -2,10 +2,8 @@ from QtUI.Ui_LabelChecker import Ui_LabelChecker
 
 import time
 
-from copy import deepcopy
-
 from PyQt6 import QtCore, QtWidgets
-from PyQt6.QtCore import pyqtSignal, Qt, QEvent
+from PyQt6.QtCore import pyqtSignal, pyqtSlot, Qt
 from PyQt6.QtWidgets import QWidget, QGraphicsScene, QGraphicsPixmapItem, QVBoxLayout, QMessageBox, QApplication, QMenu, QFileDialog
 from PyQt6.QtGui import QPixmap, QImage, QAction, QCursor
 import logging
@@ -14,57 +12,75 @@ import cv2
 from functools import partial
 from types import MethodType
 
-"""
-@brief: 按钮事件回调
-"""
 class ButtonCallbackType(Enum):
+    """
+    @brief: 按钮事件回调
+    """
     EditTemplateButton = 1
     OpenTargetStreamClicked = 2
     OpenTargetPhotoClicked = 3
     LoadParamsClicked = 4
 
 
-"""
-@brief: ComboBox所选目标改变事件的回调
-"""
 class ComboBoxChangedCallback(Enum):
+    """
+    @brief: ComboBox所选目标改变事件的回调
+    """
     TemplatesChanged = 1
 
 
-"""
-@brief: 窗口的常驻图像控件(GraphicView)的枚举类
-"""
 class GraphicWidgets(Enum):
+    """
+    @brief: 窗口的常驻图像控件(GraphicView)的枚举类
+    """
     MainGraphicView = 1
     TemplateGraphicView = 2
 
 
-"""
-@brief: 进度条枚举类
-"""
 class ProgressBarWidgts(Enum):
+    """
+    @brief: 进度条枚举类
+    """
     CompareProgressBar = 1
 
 
-"""
-@brief: 参数区运行参数结构体
-@param:
-    - h_min: 标签色块寻找时最低色相值
-    - h_max: 标签色块寻找时最高色相值
-    - s_min: 标签色块寻找时最低饱和度
-    - s_max: 标签色块寻找时最高饱和度
-    - depth_threshold: 标签的打印样式黑度阈值
-    - class_similarity: 判定同类标签的相似度
-    - not_good_similarity: 同类标签中不合格标签的相似度
-    - linear_error: 容许的线性误差
-    - defect_min_area: 检出缺陷最小面积
-"""
-class WorkingParams():
+class _param_changed_source(Enum):
+    """
+    @brief: 私有类, 用于标识参数变化源
+    """
+    HMinChagned = 1
+    HMaxChanged = 2
+    SMinChanged = 3
+    SMaxChanged = 4
+    DepthThresholdChanged = 5
+    ClassSimilarityChanged = 6
+    NotGoodSimilarityChanged = 7
+    LinearErrorChanged = 8
+    DefectMinAreaChanged = 9
+
+
+class CheckerUIParams():
+    """
+    @brief: 参数区运行参数结构体
+    @param:
+        - h_min: 标签色块寻找时最低色相值
+        - h_max: 标签色块寻找时最高色相值
+        - s_min: 标签色块寻找时最低饱和度
+        - s_max: 标签色块寻找时最高饱和度
+        - depth_threshold: 标签的打印样式黑度阈值
+        - class_similarity: 判定同类标签的相似度
+        - not_good_similarity: 同类标签中不合格标签的相似度
+        - linear_error: 容许的线性误差
+        - defect_min_area: 检出缺陷最小面积
+        - 
+    """
     def __init__(self, 
         h_min:int = 0, h_max:int = 170, s_min:int = 13, s_max:int = 255,
         depth_threshold:int = 130, class_similarity:int = 90, 
         not_good_similarity:int = 95, linear_error:int = 7,
-        defect_min_area:int = 6
+        defect_min_area:int = 6,
+        export_defeats:bool = True, export_pattern:bool = False,
+        export_diff:bool = False, export_high_pre_diff:bool = False
     ) -> None:
         self.h_min = h_min
         self.h_max = h_max
@@ -76,20 +92,10 @@ class WorkingParams():
         self.linear_error = linear_error
         self.defect_min_area = defect_min_area
 
-
-"""
-@brief: 私有类, 用于标识参数变化源
-"""
-class _param_changed_source(Enum):
-    HMinChagned = 1
-    HMaxChanged = 2
-    SMinChanged = 3
-    SMaxChanged = 4
-    DepthThresholdChanged = 5
-    ClassSimilarityChanged = 6
-    NotGoodSimilarityChanged = 7
-    LinearErrorChanged = 8
-    DefectMinAreaChanged = 9
+        self.export_defeats = export_defeats
+        self.export_pattern = export_pattern
+        self.export_diff = export_diff
+        self.export_high_pre_diff = export_high_pre_diff
 
 
 class LabelCheckerUI(Ui_LabelChecker, QWidget):
@@ -114,8 +120,7 @@ class LabelCheckerUI(Ui_LabelChecker, QWidget):
         self._param_callback = lambda: logging.warning("params_changed_callback not set.")
 
         # 默认参数
-        self._param = WorkingParams()
-
+        self._param = CheckerUIParams()
 
 
     def _wheel_event(self, widget, event):
@@ -213,9 +218,14 @@ class LabelCheckerUI(Ui_LabelChecker, QWidget):
         self._set_graphic_detail_signal.connect(self._set_graphic_detail_content, type=Qt.ConnectionType.BlockingQueuedConnection)
         ### MessageBox
         self._make_msg_box_signal.connect(self._make_msg_box)
-        ### 进度条
+        ### 进度条更改信号
         self._set_progress_bar_value_signal.connect(self._set_progress_bar_value)
-
+        ### CheckBox点击信号
+        self.ExportDefectsCheckBox.stateChanged.connect(lambda: self._check_box_changed_callback(self.ExportDefectsCheckBox))
+        self.ExportPatternCheckBox.stateChanged.connect(lambda: self._check_box_changed_callback(self.ExportPatternCheckBox))
+        self.ExportDiffCheckBox.stateChanged.connect(lambda: self._check_box_changed_callback(self.ExportDiffCheckBox))
+        self.ExportHighPreDiffCheckBox.stateChanged.connect(lambda: self._check_box_changed_callback(self.ExportHighPreDiffCheckBox))
+        
 
     def _connect_param_widgets_signal(self, param_widget_map:dict):
         # 将Slider释放信号和SpinBox修改的信号连接到 `_param_changed_cb`
@@ -230,38 +240,55 @@ class LabelCheckerUI(Ui_LabelChecker, QWidget):
             ## TODO
 
 
-    """
-    @brief: ComboBox所选目标改变的回调函数
-    """
     def _cb_changed_callbacks(self, target:ComboBoxChangedCallback):
+        """
+        @brief: ComboBox所选目标改变的回调函数, 并非槽函数
+        """
         if(not target.name in self._cb_changed_callback_map):
             logging.warning("Callback: " + target.name + " not set.")
         else:
             self._cb_changed_callback_map[target.name](self.TemplatesComboBox.currentIndex(), self.TemplatesComboBox.currentText())
 
 
-    """
-    @brief: 按钮的槽函数, 回调事件转发器
-    """
+    def _check_box_changed_callback(self, widget:QtWidgets.QCheckBox):
+        match widget:
+            case self.ExportDefectsCheckBox:
+                self._param.export_defeats = self.ExportDefectsCheckBox.isChecked()
+            case self.ExportPatternCheckBox:
+                self._param.export_pattern = self.ExportDefectsCheckBox.isChecked()
+            case self.ExportDiffCheckBox:
+                self._param.export_diff = self.ExportDefectsCheckBox.isChecked()
+            case self.ExportHighPreDiffCheckBox:
+                self._param.export_high_pre_diff = self.ExportDefectsCheckBox.isChecked()
+        self._param_callback(self._param)
+
+
+    @pyqtSlot(ButtonCallbackType)
     def _btn_callbacks(self, target:ButtonCallbackType):
+        """
+        @brief: 按钮的槽函数, 回调事件转发器
+        """
         if(not target.name in self._btn_callback_map):
             logging.warning("Callback: " + target.name + " not set.")
         else:
             self._btn_callback_map[target.name]()
 
 
-    """
-    @brief: 设置进度条进度的槽函数
-    """
+
+    @pyqtSlot(ProgressBarWidgts, int)
     def _set_progress_bar_value(self, target:ProgressBarWidgts, value:int):
+        """
+        @brief: 设置进度条进度的槽函数
+        """
         self._progress_bars[target.name].setValue(value)
         logging.debug(value)
 
 
-    """
-    @brief: 更新图像的槽函数
-    """
+    @pyqtSlot(QImage, GraphicWidgets)
     def _update_graphic_view(self, img:QImage, target:GraphicWidgets):
+        """
+        @brief: 更新图像的槽函数
+        """
         pixmap = QPixmap.fromImage(img)
         pixmap_item = QGraphicsPixmapItem(pixmap)
         self._graphic_widgets_scenes[target.name].clear()
@@ -269,10 +296,11 @@ class LabelCheckerUI(Ui_LabelChecker, QWidget):
         self._graphic_widgets_scenes[target.name].update()
 
 
-    """
-    @brief: 参数区变化的槽函数
-    """
+    @pyqtSlot(_param_changed_source)
     def _param_changed_cb(self, source:_param_changed_source):
+        """
+        @brief: 参数区变化的槽函数
+        """
         # 获取事件对应的Slider和SpinBox
         slider = self._param_widgets[source][0]
         spin_box = self._param_widgets[source][1]
@@ -324,7 +352,6 @@ class LabelCheckerUI(Ui_LabelChecker, QWidget):
 
     def _img_save_callback(self, id:int):
         destpath, filetype = QFileDialog.getSaveFileName(self, "文件图像", str(time.time()) + ".jpg", "JPEG图像 (*.jpg)")
-        logging.info(id)
         if((destpath is not None) and len(destpath)):
             try:
                 self._graphic_details_cv_image_list[id].save(destpath)

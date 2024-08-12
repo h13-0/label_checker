@@ -6,11 +6,13 @@ import numpy as np
 import logging
 
 from PyQt6.QtWidgets import QFileDialog
+
 from Workflow.TemplateEditor import TemplateEditor
+
 
 from Template.Template import Template
 from LabelChecker.LabelChecker import LabelChecker
-from QtUI.LabelCheckerUI import LabelCheckerUI, ButtonCallbackType, GraphicWidgets, WorkingParams, ComboBoxChangedCallback, ProgressBarWidgts
+from QtUI.LabelCheckerUI import LabelCheckerUI, CheckerUIParams, ButtonCallbackType, GraphicWidgets, ComboBoxChangedCallback, ProgressBarWidgts
 from Utils.Config import Config
 
 """
@@ -25,7 +27,7 @@ class MainWorkingFlow():
         self._config = config
 
         # 运行时参数
-        self._params = WorkingParams()
+        self._params = CheckerUIParams()
         self._params_lock = threading.Lock()
 
         # 模板编辑器相关变量
@@ -209,7 +211,7 @@ class MainWorkingFlow():
     """
     @brief: "参数调整区"的回调函数
     """
-    def _working_param_changed_cb(self, params:WorkingParams):
+    def _working_param_changed_cb(self, params:CheckerUIParams):
         with self._params_lock:
             self._params = params
         with self._input_changed_lock:
@@ -495,7 +497,7 @@ class MainWorkingFlow():
                         threshold=params.depth_threshold,
                         shielded_areas=template_shielded_areas,
                         thickness_tol=params.linear_error,
-                        gen_high_pre_diff=True
+                        gen_high_pre_diff=params.export_high_pre_diff
                     )
 
                     # 计算误差
@@ -560,17 +562,20 @@ class MainWorkingFlow():
                                     )
 
                         # show
-                        target_result["id: " + str(id)] = target_trans
-                        diff_bgr = cv2.cvtColor(diff, cv2.COLOR_GRAY2BGR)
-                        target_result["id: " + str(id) + " diff"] = diff_bgr
-
+                        if(params.export_defeats):
+                            target_result["id: " + str(id)] = target_trans
+                        if(params.export_pattern):
+                            pattern_bgr = cv2.cvtColor(pattern, cv2.COLOR_GRAY2BGR)
+                            target_result["id: " + str(id) + " pattern"] = pattern_bgr
+                        if(params.export_diff):
+                            diff_bgr = cv2.cvtColor(diff, cv2.COLOR_GRAY2BGR)
+                            target_result["id: " + str(id) + " diff"] = diff_bgr
                         # 高精度误差图
                         if(high_pre_diff is not None):
                             diff_high_pre_bgr = cv2.cvtColor(high_pre_diff, cv2.COLOR_GRAY2BGR)
                             target_result["id: " + str(id) + " high diff"] = diff_high_pre_bgr
 
-                        pattern_bgr = cv2.cvtColor(pattern, cv2.COLOR_GRAY2BGR)
-                        target_result["id: " + str(id) + " pattern"] = pattern_bgr
+
 
 
                     # 输出进度到进度条
