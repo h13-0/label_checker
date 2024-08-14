@@ -580,6 +580,70 @@ class InkDefectDetector():
         self._img_sz = img_sz
 
 
+    def _postprocess(self, output, factor:float, conf_thres:float = 0.2, iou_thres:float = 0.2):
+        """
+        @brief: yolov8模型后处理
+        @param: 
+            - output: yolov8在onnx上的计算输出
+            - factor: 图像的缩放系数(缩放时应保持横纵比)
+        @return:
+            [
+                [x, y, w, h, confidence, cls]
+            ]
+        """
+        # 转置并压缩输出以匹配期望的形状：(8400, 84)
+        outputs = np.transpose(np.squeeze(output[0]))
+        # 获取输出数组的行数
+        rows = outputs.shape[0]
+        # 存储检测到的边界框、分数和类别ID的列表
+        boxes = []
+        scores = []
+        class_ids = []
+        output = []
+
+        # 遍历输出数组的每一行
+        for i in range(rows):
+            # 从当前行提取类别的得分
+            classes_scores = outputs[i][4:]
+            # 找到类别得分中的最大值
+            max_score = np.amax(classes_scores)
+
+            # 如果最大得分大于或等于置信度阈值
+            if max_score >= conf_thres:
+                # 获取得分最高的类别ID
+                class_id = np.argmax(classes_scores)
+
+                # 从当前行提取边界框坐标
+                x, y, w, h = outputs[i][0], outputs[i][1], outputs[i][2], outputs[i][3]
+
+                # 计算边界框的缩放坐标
+                x = round(x / factor)
+                y = round(y / factor)
+                w = round(w / factor)
+                h = round(h / factor)
+
+                # 将类别ID、得分和边界框坐标添加到相应的列表中
+                class_ids.append(class_id)
+                scores.append(max_score)
+                boxes.append([x, y, w, h])
+
+        # 应用非极大抑制以过滤重叠的边界框
+        indices = cv2.dnn.NMSBoxes(boxes, scores, conf_thres, iou_thres)
+
+        # 遍历非极大抑制后选择的索引
+        for i in indices:
+            # 获取与索引对应的边界框、得分和类别ID
+            box = boxes[i]
+            score = scores[i]
+            class_id = class_ids[i]
+            obj = box
+            obj.append(score)
+            obj.append(class_id)
+            output.append(obj)
+
+        return output
+
+
     def detect(self, img, confidence_thre:float = 0.2, template_defects:list = []) -> list:
         """
         @brief: 检测待检图像的断墨缺陷
@@ -590,9 +654,9 @@ class InkDefectDetector():
                 - 模板图像的标定缺陷, 用于排除模板自带的缺陷, 以及追加模板自带但待测图像不带的缺陷
         @return: [x, y, w, h, confidence, class] 构成的列表
         """
+        # 前处理
         ori_w = img.shape[1]
         ori_h = img.shape[0]
-
         scale = min(float(self._img_sz) / ori_w, float(self._img_sz) / ori_h)
         scaled_img = cv2.resize(img, (0, 0), fx=scale, fy=scale)
         border_h = self._img_sz - scaled_img.shape[0]
@@ -603,23 +667,15 @@ class InkDefectDetector():
         img /= 255.0
         img = np.expand_dims(img, axis=0)
 
+        # 推理
         input_name = self._sesson.get_inputs()[0].name
         output_names = [o.name for o in self._sesson.get_outputs()]
-        detections = self._sesson.run(output_names, {input_name: img})[0]
+        output = self._sesson.run(output_names, {input_name: img})[0]
 
-        defects = []
+        # 模型后处理
+        defects = self._postprocess(output, scale)
 
-        # 滤掉conf过低的数据, 并将cls转换为int
-        for i in range(len(detections[0])):
-            x, y, w, h, confidence, cls = detections[0][i]
-            if(confidence > confidence_thre):
-                cls = round(cls)
-                x /= scale
-                y /= scale
-                w /= scale
-                h /= scale
-                defects.append([x, y, w, h, confidence, cls])
-
+        # 和模板进行比对
         if(len(template_defects)):
             # 为defects补充template中有但是img中没有的缺陷
             img_lost = []

@@ -460,6 +460,9 @@ class MainWorkingFlow():
                         # 目标需要更新
                         target_img = self._img_dict["待检图像"].copy()
 
+                ## 清除图像详情列表
+                self._ui.clear_graphic_details()
+
                 ## 重置进度条
                 self._ui.set_progress_bar_value(ProgressBarWidgts.CompareProgressBar, 0)
 

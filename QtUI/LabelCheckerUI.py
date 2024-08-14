@@ -356,6 +356,7 @@ class LabelCheckerUI(Ui_LabelChecker, QWidget):
 
     def _img_save_callback(self, id:int):
         destpath, filetype = QFileDialog.getSaveFileName(self, "文件图像", str(time.time()) + ".jpg", "JPEG图像 (*.jpg)")
+        logging.info(id)
         if((destpath is not None) and len(destpath)):
             try:
                 self._graphic_details_qimage_list[id].save(destpath)
@@ -379,7 +380,7 @@ class LabelCheckerUI(Ui_LabelChecker, QWidget):
             - title: 图像标题
             - img: QImage类型的图像
         """
-        self._graphic_details_qimage_list.append(img)
+        self._graphic_details_qimage_list.append(img.copy())
 
         # 计算控件大小
         img_w = self.GraphicDetialList.width() - 60
@@ -411,15 +412,13 @@ class LabelCheckerUI(Ui_LabelChecker, QWidget):
         ## 为GraphicView创建右键菜单
         graphic_view.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         graphic_view.customContextMenuRequested.connect(
-            lambda point, gv=graphic_view, i=id:self._create_graphic_detail_menu(graphic_view=gv, id=i)
+            lambda point, gv=graphic_view, i=len(self._graphic_details_qimage_list)-1:self._create_graphic_detail_menu(graphic_view=gv, id=i)
         )
-    
         pixmap = QPixmap.fromImage(img)
         pixmap_item = QGraphicsPixmapItem(pixmap)
         scene.clear()
         scene.addItem(pixmap_item)
         scene.update()
-
 
 
     @pyqtSlot()
