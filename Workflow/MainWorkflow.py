@@ -292,26 +292,26 @@ class MainWorkingFlow():
         return rects
 
 
-    """
-    @brief: 将target_img图像中指定的target_rect所在的标签与template_pattern进行匹配
-    @param:
-        - template_pattern: [只读参数], 模板样式
-        - target_img: [只读参数], 待测图像, 可以包含多个标签
-        - target_rect: [只读参数], 目标标签所在minAreaRect
-        - threshold: [只读参数], 标签图像黑度阈值, 同方法 `_process_template` 中的同名参数
-        - initial_minimum_simi: [只读参数], 初始最低相似度, 定义为: sim = (匹配样式像素数) / (标准样式像素数)
-        - 
-        - thickness_tol: [只读参数], 容许的粗细误差
-    @return:
-        - [ 滤波后误差图, 二值图样式, 二值图对应的彩色图, 高精误差图, 匹配后的模板图 ]
-    @note: 
-        本函数未来会做为并行运算的方法使用
-    """
     def _match_label(self, 
         template_pattern, target_img, target_rect, threshold:int, shielded_areas:list,
         initial_minimum_simi:float = 0.01, thickness_tol:int = 3,
         gen_high_pre_diff:bool = False
     ):
+        """
+        @brief: 将target_img图像中指定的target_rect所在的标签与template_pattern进行匹配
+        @param:
+            - template_pattern: [只读参数], 模板样式
+            - target_img: [只读参数], 待测图像, 可以包含多个标签
+            - target_rect: [只读参数], 目标标签所在minAreaRect
+            - threshold: [只读参数], 标签图像黑度阈值, 同方法 `_process_template` 中的同名参数
+            - initial_minimum_simi: [只读参数], 初始最低相似度, 定义为: sim = (匹配样式像素数) / (标准样式像素数)
+            - 
+            - thickness_tol: [只读参数], 容许的粗细误差
+        @return:
+            - [ 滤波后误差图, 二值图样式, 二值图对应的彩色图, 高精误差图, 匹配后的模板图 ]
+        @note: 
+            本函数未来会做为并行运算的方法使用
+        """
         # 1. 将模板标签仿射回标准视角
         target_wraped = self._checker.wrap_min_aera_rect(target_img, target_rect)
 
@@ -357,6 +357,8 @@ class MainWorkingFlow():
         target_remain = self._checker.cut_with_tol(matched_template_pattern, target_pattern, thickness_tol, shielded_areas)
         template_remain = self._checker.cut_with_tol(target_pattern, matched_template_pattern, thickness_tol, shielded_areas)
         diff = cv2.bitwise_or(target_remain, template_remain)
+        ## 8.1 消除由于子区域匹配带来的误差
+        diff = cv2.bitwise_and(diff, cv2.absdiff(target_pattern, template_pattern))
         high_pre_diff = None
         if(gen_high_pre_diff):
             target_remain = self._checker.cut_with_tol(matched_template_pattern, target_pattern, 0, shielded_areas)
@@ -368,7 +370,6 @@ class MainWorkingFlow():
             img=target_wraped, x=x, y=y, angle=angle, output_size=[template_pattern.shape[1], template_pattern.shape[0]], border_color=[255, 255, 255]
         )
         return [ diff, target_trans, target_pattern, high_pre_diff, matched_template_pattern ]
-
 
 
     def _main(self):
@@ -558,6 +559,7 @@ class MainWorkingFlow():
                         ink_defects = []
                         if(self._detector):
                             ink_defects = self._detector.detect(target_trans, template_defects=template_defects)
+                            #ink_defects = self._detector.detect(target_trans)
                             for defect in ink_defects:
                                 [x, y, w, h, confidence, cls] = defect
                                 logging.debug(defect)
@@ -601,7 +603,6 @@ class MainWorkingFlow():
                     logging.info("main workflow exit.")
             
             # Sleep 0.02s
-            #cv2.waitKey(2)
             time.sleep(0.02)
         if(self._editor is not None):
             self._editor.exit()

@@ -552,8 +552,8 @@ class LabelChecker():
             offset = self.fine_tune(
                 test=template_partition,
                 std=target_partition,
-                max_abs_x=7,
-                max_abs_y=7,
+                max_abs_x=min(7, w),
+                max_abs_y=min(7, h),
                 max_abs_a=1.0,
                 max_iterations=10,
                 angle_step=0.0005,
@@ -592,8 +592,13 @@ class InkDefectDetector():
         """
         ori_w = img.shape[1]
         ori_h = img.shape[0]
-        ori_img = cv2.resize(img, (self._img_sz, self._img_sz))
-        img = ori_img[:, :, ::-1].transpose(2, 0, 1)
+
+        scale = min(float(self._img_sz) / ori_w, float(self._img_sz) / ori_h)
+        scaled_img = cv2.resize(img, (0, 0), fx=scale, fy=scale)
+        border_h = self._img_sz - scaled_img.shape[0]
+        border_w = self._img_sz - scaled_img.shape[1]
+        bordered_img = cv2.copyMakeBorder(scaled_img, 0, border_h, 0, border_w, cv2.BORDER_CONSTANT, value=(255, 255, 255))
+        img = bordered_img[:, :, ::-1].transpose(2, 0, 1)
         img = img.astype(dtype=np.float32)
         img /= 255.0
         img = np.expand_dims(img, axis=0)
@@ -602,9 +607,6 @@ class InkDefectDetector():
         output_names = [o.name for o in self._sesson.get_outputs()]
         detections = self._sesson.run(output_names, {input_name: img})[0]
 
-        scale_x = float(ori_w) / self._img_sz
-        scale_y = float(ori_h) / self._img_sz
-
         defects = []
 
         # 滤掉conf过低的数据, 并将cls转换为int
@@ -612,10 +614,10 @@ class InkDefectDetector():
             x, y, w, h, confidence, cls = detections[0][i]
             if(confidence > confidence_thre):
                 cls = round(cls)
-                x *= scale_x
-                y *= scale_y
-                w *= scale_x
-                h *= scale_y
+                x /= scale
+                y /= scale
+                w /= scale
+                h /= scale
                 defects.append([x, y, w, h, confidence, cls])
 
         if(len(template_defects)):
