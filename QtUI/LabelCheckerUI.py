@@ -136,14 +136,7 @@ class LabelCheckerUI(Ui_LabelChecker, QWidget):
             ):
                 widget.scale(scale, scale)
             elif(widget in self._graphic_details_graphic_view_list):
-                for i in range(len(self._graphic_details_graphic_view_list)):
-                    self._graphic_details_graphic_view_list[i].scale(scale, scale)
-                    width = self._graphic_details_graphic_view_list[i].width() + 20
-                    height = self._graphic_details_graphic_view_list[i].height() + 30
-                    self._graphic_details_group_box_list[i].setMaximumWidth(width)
-                    self._graphic_details_group_box_list[i].setMinimumWidth(width)
-                    self._graphic_details_group_box_list[i].setMaximumHeight(height)
-                    self._graphic_details_group_box_list[i].setMinimumHeight(height)
+                widget.scale(scale, scale)
 
 
     def setupUi(self, MainWindow):
@@ -349,7 +342,7 @@ class LabelCheckerUI(Ui_LabelChecker, QWidget):
 
     def _clear_combo_box(self):
         """
-        清除ComboBox中所有元素
+        @brief: 清除ComboBox中所有元素
         """
         self.TemplatesComboBox.clear()
 

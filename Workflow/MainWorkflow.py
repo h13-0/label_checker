@@ -15,10 +15,11 @@ from QtUI.LabelCheckerUI import LabelCheckerUI, CheckerUIParams, ButtonCallbackT
 from QtUI.Widgets.MessageBox import MessageBox
 from Utils.Config import Config
 
-"""
-@brief: 主工作逻辑
-"""
+
 class MainWorkingFlow():
+    """
+    @brief: 主工作逻辑
+    """
     def __init__(self, ui:LabelCheckerUI, stop_event:threading.Event, config:Config) -> None:
         self._checker = LabelChecker()
         self._img_list = {}
@@ -66,10 +67,10 @@ class MainWorkingFlow():
         self._input_changed_lock = threading.Lock()
 
 
-    """
-    @brief: 非重要的初始化操作, 可在子线程中执行, 节约主函数等待时间
-    """
     def _init(self):
+        """
+        @brief: 非重要的初始化操作, 可在子线程中执行, 节约主函数等待时间
+        """
         # 配置回调函数
         self._ui.set_btn_callback(ButtonCallbackType.EditTemplateButton, self._create_editor_cb)
         self._ui.set_btn_callback(ButtonCallbackType.OpenTargetPhotoClicked, self._open_target_photo_cb)
@@ -89,7 +90,7 @@ class MainWorkingFlow():
 
     def _refresh_templates(self):
         """
-        刷新Template列表
+        @brief: 刷新Template列表
         """
         # 清除所有选项
         self._ui.clear_template_option()
@@ -108,10 +109,10 @@ class MainWorkingFlow():
             self._ui.add_template_option(template)
 
 
-    """
-    @brief: 创建模板编辑器的回调
-    """
     def _create_editor_cb(self):
+        """
+        @brief: 创建模板编辑器按钮的回调函数
+        """
         if(self._editor is None):
             # 回调函数一定为主线程, 因此可以操作UI
             if(self._template_id != 0):
@@ -384,6 +385,27 @@ class MainWorkingFlow():
         return [ diff, target_trans, target_pattern, high_pre_diff, matched_template_pattern ]
 
 
+    def _draw_rect_on_src(self, 
+        src, 
+        label_x, label_y, label_angle, label_w, label_h,
+        x, y, w, h
+    ):
+        """
+        @brief: 将方框画回原图像
+        @param:
+            - src: 原待测图像
+            - label_x: 目标标签中心点在原图像上的位置
+            - label_y: 目标标签中心点在原图像上的位置
+            - label_angle: 目标标签的倾斜角度
+            - label_w: 目标标签的宽度
+            - label_h: 目标标签的高度
+            - x: 要绘制的方框的坐标
+            - y: 要绘制的方框的坐标
+            - w: 要绘制的方框的宽度
+            - h: 要绘制的方框的高度
+        """
+        return src
+
     def _main(self):
         self._init()
 
@@ -414,7 +436,6 @@ class MainWorkingFlow():
             with self._input_changed_lock:
                 input_changed = self._input_changed
                 self._input_changed = False
-                
             
             # 当输入变化时, 重新运算
             if(input_changed):
@@ -572,7 +593,6 @@ class MainWorkingFlow():
                         ink_defects = []
                         if(self._detector):
                             ink_defects = self._detector.detect(target_trans, template_defects=template_defects)
-                            #ink_defects = self._detector.detect(target_trans)
                             for defect in ink_defects:
                                 [x, y, w, h, confidence, cls] = defect
                                 logging.debug(defect)
@@ -584,27 +604,36 @@ class MainWorkingFlow():
                                     box_thickness
                                 )
 
-                        # 在操作ui之前确保程序没有被退出
+                        # 3. 输出结果
+                        ## 3.0 在操作ui之前确保程序没有被退出
                         if(self._stop_event.is_set()):
                             logging.info("main workflow exit.")
-                        # 同步输出到UI
+                            
+                        ## 3.1 将结果绘制回原图
+                        #target_img_with_mark = self._draw_rect_on_src(
+                        #    src=target_img,
+                        #    label_x=
+                        #
+
+                        ## 3.2 同步输出到UI
                         self._ui.set_graphic_widget(target_img_with_mark, GraphicWidgets.MainGraphicView)
-                        ## 显示标签详情
+                        ## 3.3 准备图像详情列表
+                        ### 3.3.1 显示标签详情
                         if(params.export_defeats):
                             self._ui.add_graphic_detail_to_list("id: " + str(id), target_trans)
-                        ## 显示标签打印样式
+                        ### 3.3.2 显示标签打印样式
                         if(params.export_pattern):
                             pattern_bgr = cv2.cvtColor(pattern, cv2.COLOR_GRAY2BGR)
                             self._ui.add_graphic_detail_to_list("id: " + str(id) + " 打印样式", pattern_bgr)
-                        ## 显示标签误差图
+                        ### 3.3.3 显示标签误差图
                         if(params.export_diff):
                             diff_bgr = cv2.cvtColor(diff, cv2.COLOR_GRAY2BGR)
                             self._ui.add_graphic_detail_to_list("id: " + str(id) + " 误差图", diff_bgr)
-                        ## 显示标签高精度误差图
+                        ### 3.3.4 显示标签高精度误差图
                         if(high_pre_diff is not None):
                             diff_high_pre_bgr = cv2.cvtColor(high_pre_diff, cv2.COLOR_GRAY2BGR)
                             self._ui.add_graphic_detail_to_list("id: " + str(id) + " 高精误差图", diff_high_pre_bgr)
-                        ## 显示标签匹配后模板样式图
+                        ### 3.3.5 显示标签匹配后模板样式图
                         if(params.export_matched_template):
                             matched_template_pattern_bgr = cv2.cvtColor(matched_template_pattern, cv2.COLOR_GRAY2BGR)
                             self._ui.add_graphic_detail_to_list("id: " + str(id) + " 匹配后模板样式图", matched_template_pattern_bgr)
