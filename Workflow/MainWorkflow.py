@@ -5,14 +5,14 @@ import cv2
 import numpy as np
 import logging
 
-from PyQt6.QtWidgets import QFileDialog
+from PyQt6.QtWidgets import QFileDialog, QMessageBox
 
 from Workflow.TemplateEditor import TemplateEditor
-
 
 from Template.Template import Template
 from LabelChecker.LabelChecker import LabelChecker
 from QtUI.LabelCheckerUI import LabelCheckerUI, CheckerUIParams, ButtonCallbackType, GraphicWidgets, ComboBoxChangedCallback, ProgressBarWidgts
+from QtUI.Widgets.MessageBox import MessageBox
 from Utils.Config import Config
 
 """
@@ -138,10 +138,10 @@ class MainWorkingFlow():
         self._refresh_templates()
 
 
-    """
-    @brief: 调用文件选择对话框选择文件
-    """
     def _open_file(self):
+        """
+        @brief: 调用文件选择对话框选择文件
+        """
         fname, ftype = QFileDialog.getOpenFileName(self._ui, "Open File", "./", "All Files(*)")
         if(len(fname) == 0):
             logging.warning("No file select.")
@@ -176,7 +176,13 @@ class MainWorkingFlow():
                         self._template_id += 1
                         success = True
                     else:
-                        self._ui.make_msg_box("错误", "文件或文件路径错误, 请检查该文件是否为图片或路径是否不包含中文")
+                        MessageBox(
+                            parent=self._ui,
+                            title="错误",
+                            content="文件或文件路径错误, 请检查该文件是否为图片或路径是否不包含中文",
+                            icon=QMessageBox.Icon.Critical,
+                            button=QMessageBox.StandardButton.Yes
+                        ).exec()
                 except Exception as e:
                     logging.error(e)
 
@@ -185,10 +191,10 @@ class MainWorkingFlow():
                     self._input_changed = True
 
 
-    """
-    @brief: "打开待检图像"的回调函数
-    """
     def _open_target_photo_cb(self):
+        """
+        @brief: "打开待检图像"的回调函数
+        """
         target_img_file = self._open_file()
         success = False
         if(len(target_img_file)):
@@ -199,7 +205,13 @@ class MainWorkingFlow():
                         self._target_id += 1
                         success = True
                     else:
-                        self._ui.make_msg_box("错误", "文件或文件路径错误, 请检查该文件是否为图片或路径是否不包含中文")
+                        MessageBox(
+                            parent=self._ui,
+                            title="错误",
+                            content="文件或文件路径错误, 请检查该文件是否为图片或路径是否不包含中文",
+                            icon=QMessageBox.Icon.Critical,
+                            button=QMessageBox.StandardButton.Yes
+                        ).exec()
                 except Exception as e:
                     logging.error(e)
         
@@ -208,32 +220,32 @@ class MainWorkingFlow():
                     self._input_changed = True
 
 
-    """
-    @brief: "参数调整区"的回调函数
-    """
     def _working_param_changed_cb(self, params:CheckerUIParams):
+        """
+        @brief: "参数调整区"的回调函数
+        """
         with self._params_lock:
             self._params = params
         with self._input_changed_lock:
             self._input_changed = True
 
 
-    """
-    @brief: 处理模板图像
-    @param:
-        - template_img: 模板图像
-        - threshold: 标签图像黑度阈值
-    @return:
-        - 返回值为处理后的结果所构成的list
-            [
-                template_wraped,
-                template_partten
-            ]
-    """
     def _process_template(self, 
             template_img, threshold:int, 
             h_min:int, h_max:int, s_min:int, s_max:int, v_min:int, v_max:int
         ) -> list:
+        """
+        @brief: 处理模板图像
+        @param:
+            - template_img: 模板图像
+            - threshold: 标签图像黑度阈值
+        @return:
+            - 返回值为处理后的结果所构成的list
+                [
+                    template_wraped,
+                    template_partten
+                ]
+        """
         # 1. 先找到标准标签的区域
         min_rect = self._checker.find_label(
             img=template_img, 
@@ -259,21 +271,21 @@ class MainWorkingFlow():
         return [temp_wraped, temp_pattern]
 
 
-    """
-    @brief: 从待测图像中寻找标签
-    @param:
-        - img: 待测图像
-        - template_w: 模板宽度
-        - template_h: 模板高度
-        - wh_tol_ratio: 容许的长宽误差比例
-    @return:
-        - 返回值为由minAreaRect组成的list
-    """
     def _find_labels(self, 
         img, template_w:int, template_h:int,
         h_min:int, h_max:int, s_min:int, s_max:int, v_min:int, v_max:int,
         wh_tol_ratio:float = 0.1
     ) -> list:
+        """
+        @brief: 从待测图像中寻找标签
+        @param:
+            - img: 待测图像
+            - template_w: 模板宽度
+            - template_h: 模板高度
+            - wh_tol_ratio: 容许的长宽误差比例
+        @return:
+            - 返回值为由minAreaRect组成的list
+        """
         rects = self._checker.find_labels(
             img=img,
             template_w=template_w,
@@ -495,8 +507,6 @@ class MainWorkingFlow():
                 # 匹配并绘制标签
                 target_img_with_mark = target_img.copy()
                 id = 0
-                ## 存储结果
-                target_result = {}
                 target_num = len(rects)
                 for r in rects:
                     # 1. 匹配标签并获得缺陷图
@@ -571,23 +581,30 @@ class MainWorkingFlow():
                                     box_thickness
                                 )
 
-                        # show
+                        # 在操作ui之前确保程序没有被退出
+                        if(self._stop_event.is_set()):
+                            logging.info("main workflow exit.")
+                        # 同步输出到UI
+                        self._ui.set_graphic_widget(target_img_with_mark, GraphicWidgets.MainGraphicView)
+                        ## 显示标签详情
                         if(params.export_defeats):
-                            target_result["id: " + str(id)] = target_trans
+                            self._ui.add_graphic_detail_to_list("id: " + str(id), target_trans)
+                        ## 显示标签打印样式
                         if(params.export_pattern):
                             pattern_bgr = cv2.cvtColor(pattern, cv2.COLOR_GRAY2BGR)
-                            target_result["id: " + str(id) + " pattern"] = pattern_bgr
+                            self._ui.add_graphic_detail_to_list("id: " + str(id) + " 打印样式", pattern_bgr)
+                        ## 显示标签误差图
                         if(params.export_diff):
                             diff_bgr = cv2.cvtColor(diff, cv2.COLOR_GRAY2BGR)
-                            target_result["id: " + str(id) + " diff"] = diff_bgr
-                        # 高精度误差图
+                            self._ui.add_graphic_detail_to_list("id: " + str(id) + " 误差图", diff_bgr)
+                        ## 显示标签高精度误差图
                         if(high_pre_diff is not None):
                             diff_high_pre_bgr = cv2.cvtColor(high_pre_diff, cv2.COLOR_GRAY2BGR)
-                            target_result["id: " + str(id) + " high diff"] = diff_high_pre_bgr
+                            self._ui.add_graphic_detail_to_list("id: " + str(id) + " 高精误差图", diff_high_pre_bgr)
+                        ## 显示标签匹配后模板样式图
                         if(params.export_matched_template):
                             matched_template_pattern_bgr = cv2.cvtColor(matched_template_pattern, cv2.COLOR_GRAY2BGR)
-                            target_result["id: " + str(id) + " matched template"] = matched_template_pattern_bgr
-
+                            self._ui.add_graphic_detail_to_list("id: " + str(id) + " 匹配后模板样式图", matched_template_pattern_bgr)
 
                     # 输出进度到进度条
                     self._ui.set_progress_bar_value(ProgressBarWidgts.CompareProgressBar, int((id + 1) * 100 / target_num))
@@ -595,13 +612,6 @@ class MainWorkingFlow():
                 # 将进度条置为100%
                 self._ui.set_progress_bar_value(ProgressBarWidgts.CompareProgressBar, 100)
 
-                # 在操作ui之前确保程序没有被退出
-                if(not self._stop_event.is_set()):
-                    self._ui.set_graphic_detail_list(target_result)
-                    self._ui.set_graphic_widget(target_img_with_mark, GraphicWidgets.MainGraphicView)
-                else:
-                    logging.info("main workflow exit.")
-            
             # Sleep 0.02s
             time.sleep(0.02)
         if(self._editor is not None):

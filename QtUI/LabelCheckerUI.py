@@ -103,8 +103,8 @@ class CheckerUIParams():
 class LabelCheckerUI(Ui_LabelChecker, QWidget):
     # 定义Qt信号
     _update_graphic_signal = pyqtSignal(QImage, GraphicWidgets)
-    _set_graphic_detail_signal = pyqtSignal(dict)
-    _make_msg_box_signal = pyqtSignal(str, str)
+    _add_graphic_detail_signal = pyqtSignal(str, QImage)
+    _clear_graphic_details_signal = pyqtSignal()
     _add_item_to_templates_combo_box_signal = pyqtSignal(str)
     _clear_combo_box_signal = pyqtSignal()
     ## 进度条操作信号
@@ -177,7 +177,7 @@ class LabelCheckerUI(Ui_LabelChecker, QWidget):
 
         # "图像详情列表"的GroupBox、images、GraphicView及GraphicsScene
         self._graphic_details_group_box_list = []
-        self._graphic_details_cv_image_list = []
+        self._graphic_details_qimage_list = []
         self._graphic_details_graphic_view_list = []
         self._graphic_details_graphic_scene_list = []
 
@@ -217,9 +217,8 @@ class LabelCheckerUI(Ui_LabelChecker, QWidget):
         self._clear_combo_box_signal.connect(self._clear_combo_box)
         ### GraphicView 更新图像
         self._update_graphic_signal.connect(self._update_graphic_view, type=Qt.ConnectionType.BlockingQueuedConnection)
-        self._set_graphic_detail_signal.connect(self._set_graphic_detail_content, type=Qt.ConnectionType.BlockingQueuedConnection)
-        ### MessageBox
-        self._make_msg_box_signal.connect(self._make_msg_box)
+        self._add_graphic_detail_signal.connect(self._add_graphic_detail, type=Qt.ConnectionType.BlockingQueuedConnection)
+        self._clear_graphic_details_signal.connect(self._clear_graphic_details, type=Qt.ConnectionType.BlockingQueuedConnection)
         ### 进度条更改信号
         self._set_progress_bar_value_signal.connect(self._set_progress_bar_value)
         ### CheckBox点击信号
@@ -341,10 +340,10 @@ class LabelCheckerUI(Ui_LabelChecker, QWidget):
             self._param_callback(self._param)
 
 
-    """
-    @brief: 向Templates的ComboBox中添加元素的槽函数
-    """
     def _add_item_to_templates_combo_box(self, item:str):
+        """
+        @brief: 向Templates的ComboBox中添加元素的槽函数
+        """
         self.TemplatesComboBox.addItem(item)
 
 
@@ -359,7 +358,7 @@ class LabelCheckerUI(Ui_LabelChecker, QWidget):
         destpath, filetype = QFileDialog.getSaveFileName(self, "文件图像", str(time.time()) + ".jpg", "JPEG图像 (*.jpg)")
         if((destpath is not None) and len(destpath)):
             try:
-                self._graphic_details_cv_image_list[id].save(destpath)
+                self._graphic_details_qimage_list[id].save(destpath)
             except Exception as e:
                 logging.error(e)
     
@@ -372,17 +371,61 @@ class LabelCheckerUI(Ui_LabelChecker, QWidget):
         menu.popup(QCursor.pos())
 
 
-    def _set_graphic_detail_content(self, details:dict):
+    @pyqtSlot(str, QImage)
+    def _add_graphic_detail(self, title:str, img:QImage):
         """
-        @brief: 设置 "图像详情列表" 元素的槽函数
+        @brief: 向 "图像详情列表" 中添加图像的槽函数
         @param:
-            - details:
-                {
-                    "title": QImage
-                }
+            - title: 图像标题
+            - img: QImage类型的图像
         """
+        self._graphic_details_qimage_list.append(img)
+
+        # 计算控件大小
+        img_w = self.GraphicDetialList.width() - 60
+        img_h = round(img.height() * img_w / img.width())
+        box_w = img_w + 30
+        box_h = img_h + 30
+
+        # 创建控件
+        ## 1. 创建QGroupBox
+        group_box = QtWidgets.QGroupBox(title, parent=self.GraphicDetialList)
+        group_box.setMinimumSize(QtCore.QSize(box_w, box_h))
+        group_box.setMaximumSize(QtCore.QSize(box_w, box_h))
+        self.GraphicDetialListvLayout.addWidget(group_box)
+        self._graphic_details_group_box_list.append(group_box)
+    
+        ## 2. 创建scene
+        scene = QGraphicsScene()
+        self._graphic_details_graphic_scene_list.append(scene)
+        ## 3. 创建GraphicView
+        graphic_view = QtWidgets.QGraphicsView(group_box)
+        graphic_view.setObjectName(title + "GrapgicView")
+        graphic_view.setMinimumSize(QtCore.QSize(box_w - 20, box_h - 30))
+        graphic_view.setMaximumSize(QtCore.QSize(box_w - 20, box_h - 30))
+        graphic_view.move(10, 20)
+        graphic_view.setScene(scene)
+        graphic_view.wheelEvent = MethodType(self._wheel_event, graphic_view)
+        graphic_view.setDragMode(QtWidgets.QGraphicsView.DragMode.ScrollHandDrag)
+        self._graphic_details_graphic_view_list.append(graphic_view)
+        ## 为GraphicView创建右键菜单
+        graphic_view.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        graphic_view.customContextMenuRequested.connect(
+            lambda point, gv=graphic_view, i=id:self._create_graphic_detail_menu(graphic_view=gv, id=i)
+        )
+    
+        pixmap = QPixmap.fromImage(img)
+        pixmap_item = QGraphicsPixmapItem(pixmap)
+        scene.clear()
+        scene.addItem(pixmap_item)
+        scene.update()
+
+
+
+    @pyqtSlot()
+    def _clear_graphic_details(self):
         # 清除UI中所有现存图像
-        self._graphic_details_cv_image_list = []
+        self._graphic_details_qimage_list = []
 
         for view in self._graphic_details_graphic_view_list:
             view.deleteLater()
@@ -396,52 +439,6 @@ class LabelCheckerUI(Ui_LabelChecker, QWidget):
         for box in self._graphic_details_group_box_list:
             box.deleteLater()
         self._graphic_details_group_box_list = []
-
-        # 绘制新图像
-        id = 0
-        for title in details:
-            img = details[title]
-
-            # 将图像添加到list
-            self._graphic_details_cv_image_list.append(img)
-
-            box_w = self.GraphicDetialList.width() - 30
-            box_h = int((self.GraphicDetialList.width() / img.width()) * img.height()) + 30
-
-
-            # 创建GroupBox
-            group_box = QtWidgets.QGroupBox(title, parent=self.GraphicDetialList)
-            group_box.setMinimumSize(QtCore.QSize(box_w, box_h))
-            group_box.setMaximumSize(QtCore.QSize(box_w, box_h))
-            self.GraphicDetialListvLayout.addWidget(group_box)
-            self._graphic_details_group_box_list.append(group_box)
-        
-            # 创建scene
-            scene = QGraphicsScene()
-            self._graphic_details_graphic_scene_list.append(scene)
-            # 创建GraphicView
-            graphic_view = QtWidgets.QGraphicsView(group_box)
-            graphic_view.setObjectName(title + "GrapgicView")
-            graphic_view.setMinimumSize(QtCore.QSize(box_w - 20, box_h - 30))
-            graphic_view.setMaximumSize(QtCore.QSize(box_w - 20, box_h - 30))
-            graphic_view.move(10, 20)
-            graphic_view.setScene(scene)
-            graphic_view.wheelEvent = MethodType(self._wheel_event, graphic_view)
-            graphic_view.setDragMode(QtWidgets.QGraphicsView.DragMode.ScrollHandDrag)
-            self._graphic_details_graphic_view_list.append(graphic_view)
-            ## 为GraphicView创建右键菜单
-            graphic_view.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
-            graphic_view.customContextMenuRequested.connect(
-                lambda point, gv=graphic_view, i=id:self._create_graphic_detail_menu(graphic_view=gv, id=i)
-            )
-        
-            pixmap = QPixmap.fromImage(img)
-            pixmap_item = QGraphicsPixmapItem(pixmap)
-            scene.clear()
-            scene.addItem(pixmap_item)
-            scene.update()
-
-            id += 1
 
 
     """
@@ -460,12 +457,12 @@ class LabelCheckerUI(Ui_LabelChecker, QWidget):
         self._cb_changed_callback_map[target.name] = callback
 
 
-    """
-    @brief: 设置按钮回调函数的接口, 可用于设置 `ButtonCallbackType` 中定义的所有类型回调
-    @param:
-        - callback: 回调函数, 原型应为 func()
-    """
     def set_btn_callback(self, target:ButtonCallbackType, callback):
+        """
+        @brief: 设置按钮回调函数的接口, 可用于设置 `ButtonCallbackType` 中定义的所有类型回调
+        @param:
+            - callback: 回调函数, 原型应为 func()
+        """
         self._btn_callback_map[target.name] = callback
 
 
@@ -487,20 +484,20 @@ class LabelCheckerUI(Ui_LabelChecker, QWidget):
         self._clear_combo_box_signal.emit()
 
 
-    """
-    @brief: 设置进度条进度
-    @param:
-        - target: ProgressBarWidgts中指定的对象枚举
-        - value: 进度条值, int, 值域[0, 100]
-    """
     def set_progress_bar_value(self, target:ProgressBarWidgts, value:int):
+        """
+        @brief: 设置进度条进度
+        @param:
+            - target: ProgressBarWidgts中指定的对象枚举
+            - value: 进度条值, int, 值域[0, 100]
+        """
         self._set_progress_bar_value_signal.emit(target, value)
 
 
-    """
-    @brief: 设置图像控件的图像
-    """
     def set_graphic_widget(self, cv2_img, target:GraphicWidgets):
+        """
+        @brief: 设置图像控件的图像
+        """
         # 获取目标graphic view的size
         target_w = self._graphic_widgets[target.name].width()
         target_h = self._graphic_widgets[target.name].height()
@@ -513,26 +510,18 @@ class LabelCheckerUI(Ui_LabelChecker, QWidget):
         self._update_graphic_signal.emit(frame, target)
 
 
-    """
-    @brief: 在 "图像详情列表" 中绘制以 dict 保存的图像及其名称所构成的列表
-    @param:
-        - details:
-            {
-                "title": cv_img
-            }
-    """
-    def set_graphic_detail_list(self, details:dict):
-        # 将dict中的cv_img转换为QImage
-        for item in details:
-            cv_img = details[item]
-            rgb_img = cv2.cvtColor(cv_img, cv2.COLOR_BGR2RGB)
-            y = cv_img.shape[0]
-            x = cv_img.shape[1]
-            details[item] = QImage(rgb_img, x, y, x * 3, QImage.Format.Format_RGB888)
-        self._set_graphic_detail_signal.emit(details)
+    def add_graphic_detail_to_list(self, title:str, cv_img):
+        """
+        @brief: 向 "图像详情列表" 中添加图像及其标题
+        @param:
+            - title: 图像标题
+            - img: QImage类型的图像
+        """
+        rgb_img = cv2.cvtColor(cv_img, cv2.COLOR_BGR2RGB)
+        y = cv_img.shape[0]
+        x = cv_img.shape[1]
+        self._add_graphic_detail_signal.emit(title, QImage(rgb_img, x, y, x * 3, QImage.Format.Format_RGB888))
 
 
-    def make_msg_box(self, title:str, text:str):
-        self._make_msg_box_signal.emit(title, text)
-
-
+    def clear_graphic_details(self):
+        self._clear_graphic_details_signal.emit()
