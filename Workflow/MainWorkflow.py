@@ -128,6 +128,8 @@ class MainWorkingFlow():
 
         ## 模板及其互斥锁
         ### 模板原始图像
+        #### self._template为 `Template` 类型的变量
+        self._template_conf = None
         self._template_src = None
         self._template_wrapped = None
         self._template_pattern = None
@@ -243,14 +245,14 @@ class MainWorkingFlow():
         self._template_name = curr_template
         success = False
         if(id > 0):
-            template = self._template_dict[curr_template]
-            logging.info("template config: " + str(template))
+            self._template_conf = self._template_dict[curr_template]
+            logging.info("template config: " + str(self._template_conf))
             with self._template_lock:
                 try:
                     # 读取图像
-                    self._template_src = cv2.imread(template.get_img_path())
+                    self._template_src = cv2.imread(self._template_conf.get_img_path())
                     # 导入屏蔽区域
-                    for area in template.get_shielded_areas():
+                    for area in self._template_conf.get_shielded_areas():
                         self._template_shielded_areas.append((
                             area["x1"], area["y1"], area["x2"], area["y2"]
                         ))
@@ -566,9 +568,11 @@ class MainWorkingFlow():
             # 当输入变化时, 重新运算
             if(input_changed):
                 params = None
+                template_conf = None
                 # 拷贝一份参数
                 with self._params_lock:
                     params = self._params
+                    template_conf = self._template_conf
 
                 # 输入参数发生变化, 重新执行检测标签
                 ## 检测、更新并同步模板图像
@@ -576,15 +580,16 @@ class MainWorkingFlow():
                     if(curr_template_id != self._template_id):
                         # 模板需要更新
                         template_img = self._template_src.copy()
+                        hsv_thres = template_conf.get_hsv_threshold()
                         self._template_wrapped, self._template_pattern = self._process_template(
                             template_img=template_img,
                             threshold=params.depth_threshold,
-                            h_min=params.h_min,
-                            h_max=params.h_max,
-                            s_min=params.s_min,
-                            s_max=params.s_max,
-                            v_min=0,
-                            v_max=255
+                            h_min=hsv_thres["h_min"],
+                            h_max=hsv_thres["h_max"],
+                            s_min=hsv_thres["s_min"],
+                            s_max=hsv_thres["s_max"],
+                            v_min=hsv_thres["v_min"],
+                            v_max=hsv_thres["v_max"]
                         )
                         template_wraped = self._template_wrapped
 

@@ -331,6 +331,7 @@ class TemplateEditorUI(Ui_TemplateEditor, QWidget):
         self._btn_callback_map[target.name] = callback
 
 
+    @pyqtSlot(QImage, TemplateEditorGraphicViews)
     def _update_graphic_view(self, img:QImage, target:TemplateEditorGraphicViews):
         """
         @brief: 更新图像的槽函数

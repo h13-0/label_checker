@@ -315,6 +315,15 @@ class TemplateEditor():
         if(self._template is None):
             self._template = Template(save_path)
         self._template.set_img_type("jpg")
+        ## 导出HSV阈值
+        self._template.set_hsv_threshold(
+            h_min=self._param.h_min,
+            h_max=self._param.h_max,
+            s_min=self._param.s_min,
+            s_max=self._param.s_max,
+            v_min=0,#self._param.v_min,
+            v_max=255#self._param.v_max,
+        )
         ## 导出屏蔽区域和OCR-条码对照区域
         shield_areas = self._ui.get_shield_areas()
         for area in shield_areas:

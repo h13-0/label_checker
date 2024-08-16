@@ -86,10 +86,6 @@ class Template():
         return template
 
 
-    def get_shielded_areas(self):
-        return self._configs.get("shielded_areas", [])
-
-
     def get_img_path(self):
         return os.path.join(self._save_path, self._name + "." + self._configs["img_type"])
 
@@ -102,6 +98,10 @@ class Template():
         self._configs["img_type"] = type
 
 
+    def get_shielded_areas(self):
+        return self._configs.get("shielded_areas", [])
+    
+
     def add_shielded_area(self, x1:int, y1:int, x2:int, y2:int):
         """向Template中添加一个屏蔽区域"""
         area = {}
@@ -112,6 +112,47 @@ class Template():
         area_list = self._configs.get("shielded_areas", [])
         area_list.append(area)
         self._configs["shielded_areas"] = area_list
+
+
+    def get_hsv_threshold(self) -> dict:
+        """
+        @brief: 获取当前模板的HSV阈值
+        @return: dict with:
+            {
+                "h_min": h_min,
+                "h_max": h_max,
+                "s_min": s_min,
+                "s_max": s_max,
+                "v_min": v_min,
+                "v_max": v_max,
+            }
+        """
+        return self._configs.get(
+            "hsv_threshold", 
+            {
+                "h_min": 0,
+                "h_max": 255,
+                "s_min": 0,
+                "s_max": 255,
+                "v_min": 0,
+                "v_max": 255,
+            }
+        )
+
+
+    def set_hsv_threshold(self,
+            h_min:int, h_max:int,
+            s_min:int, s_max:int,
+            v_min:int, v_max:int
+        ):
+        hsv_thre = {}
+        hsv_thre["h_min"] = h_min
+        hsv_thre["h_max"] = h_max
+        hsv_thre["s_min"] = s_min
+        hsv_thre["s_max"] = s_max
+        hsv_thre["v_min"] = v_min
+        hsv_thre["v_max"] = v_max
+        self._configs["hsv_threshold"] = hsv_thre
 
 
     def save(self):
