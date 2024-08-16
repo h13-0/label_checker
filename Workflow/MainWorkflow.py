@@ -16,6 +16,96 @@ from QtUI.Widgets.MessageBox import MessageBox
 from Utils.Config import Config
 
 
+class LabelDetectResult():
+    def __init__(self) -> None:
+        self._diff = None
+        self._target_pattern = None
+        self._target_transed = None
+        self._high_pre_diff = None
+        self._matched_template_pattern = None
+        self._ink_defects = []
+        self._offset_x = 0
+        self._offset_y = 0
+        self._offset_angle = 0
+
+    @property
+    def diff(self):
+        return self._diff
+    
+    @diff.setter
+    def diff(self, diff:np.ndarray):
+        if(isinstance(diff, np.ndarray)):
+            self._diff = diff.copy()
+
+    @property
+    def target_pattern(self):
+        return self._target_pattern
+    
+    @target_pattern.setter
+    def target_pattern(self, target_pattern:np.ndarray):
+        if(isinstance(target_pattern, np.ndarray)):
+            self._target_pattern = target_pattern.copy()
+
+    @property
+    def target_transed(self):
+        return self._target_transed
+
+    @target_transed.setter
+    def target_transed(self, target_transed:np.ndarray):
+        if(isinstance(target_transed, np.ndarray)):
+            self._target_transed = target_transed.copy()
+
+    @property
+    def high_pre_diff(self):
+        return self._high_pre_diff
+
+    @high_pre_diff.setter
+    def high_pre_diff(self, high_pre_diff:np.ndarray):
+        if(isinstance(high_pre_diff, np.ndarray)):
+            self._high_pre_diff = high_pre_diff.copy()
+
+    @property
+    def matched_template_pattern(self):
+        return self._matched_template_pattern
+    
+    @matched_template_pattern.setter
+    def matched_template_pattern(self, matched_template_pattern:np.ndarray):
+        if(isinstance(matched_template_pattern, np.ndarray)):
+            self._matched_template_pattern = matched_template_pattern.copy()
+
+    @property
+    def ink_defects(self):
+        return self._ink_defects
+
+    @ink_defects.setter
+    def ink_defects(self, ink_defects):
+        self._ink_defects = ink_defects
+
+    @property
+    def offset_x(self):
+        return self._offset_x
+    
+    @offset_x.setter
+    def offset_x(self, offset_x):
+        self._offset_x = offset_x
+
+    @property
+    def offset_y(self):
+        return self._offset_y
+    
+    @offset_y.setter
+    def offset_y(self, offset_y):
+        self._offset_y = offset_y
+
+    @property
+    def offset_angle(self):
+        return self._offset_angle
+    
+    @offset_angle.setter
+    def offset_angle(self, offset_angle):
+        self._offset_angle = offset_angle
+
+
 class MainWorkingFlow():
     """
     @brief: 主工作逻辑
@@ -36,15 +126,11 @@ class MainWorkingFlow():
         self._template_id = 0
         self._template_name = ""
 
-
-        # 图像成员变量, 写入dict方便用户debug
-        self._img_dict = {}
-
         ## 模板及其互斥锁
-        ### TODO, 弃用dict
-        self._img_dict["模板原始图像"] = None
-        self._img_dict["模板图像"] = None
-        self._img_dict["模板样式"] = None
+        ### 模板原始图像
+        self._template_src = None
+        self._template_wrapped = None
+        self._template_pattern = None
         ### 模板样式屏蔽区域与OCR-条码核对区域
         ### 模板样式屏蔽区域(包含屏蔽区域和OCR-条码核对区域)
         self._template_shielded_areas = []
@@ -55,8 +141,7 @@ class MainWorkingFlow():
         self._template_lock = threading.Lock()
 
         ## 待检图像及其互斥锁、条件变量。条件变量用于同步视频流等输入
-        self._img_dict["待检图像"] = None
-        self._img_dict["标签"] = []
+        self._target_src = None
         ### _target_id 用于检测目标图像是否变化
         self._target_id = 0
         ### _target_lock 用于保持上述两个图像及id的互斥访问
@@ -163,7 +248,7 @@ class MainWorkingFlow():
             with self._template_lock:
                 try:
                     # 读取图像
-                    self._img_dict["模板原始图像"] = cv2.imread(template.get_img_path())
+                    self._template_src = cv2.imread(template.get_img_path())
                     # 导入屏蔽区域
                     for area in template.get_shielded_areas():
                         self._template_shielded_areas.append((
@@ -173,7 +258,7 @@ class MainWorkingFlow():
                     ## TODO
                     
                     # 校验结果
-                    if(self._img_dict["模板原始图像"] is not None):
+                    if(self._template_src is not None):
                         self._template_id += 1
                         success = True
                     else:
@@ -201,8 +286,8 @@ class MainWorkingFlow():
         if(len(target_img_file)):
             with self._target_lock:
                 try:
-                    self._img_dict["待检图像"] = cv2.imread(target_img_file)
-                    if(self._img_dict["待检图像"] is not None):
+                    self._target_src = cv2.imread(target_img_file)
+                    if(self._target_src is not None):
                         self._target_id += 1
                         success = True
                     else:
@@ -307,9 +392,9 @@ class MainWorkingFlow():
 
     def _match_label(self, 
         template_pattern, target_img, target_rect, threshold:int, shielded_areas:list,
-        initial_minimum_simi:float = 0.01, thickness_tol:int = 3,
+        template_defects:list=[], thickness_tol:int = 3,
         gen_high_pre_diff:bool = False
-    ):
+    ) -> LabelDetectResult:
         """
         @brief: 将target_img图像中指定的target_rect所在的标签与template_pattern进行匹配
         @param:
@@ -317,11 +402,10 @@ class MainWorkingFlow():
             - target_img: [只读参数], 待测图像, 可以包含多个标签
             - target_rect: [只读参数], 目标标签所在minAreaRect
             - threshold: [只读参数], 标签图像黑度阈值, 同方法 `_process_template` 中的同名参数
-            - initial_minimum_simi: [只读参数], 初始最低相似度, 定义为: sim = (匹配样式像素数) / (标准样式像素数)
-            - 
+            - template_defects: [只读参数], 标签模板检出缺陷, 用于进行匹配
             - thickness_tol: [只读参数], 容许的粗细误差
         @return:
-            - [ 滤波后误差图, 二值图样式, 二值图对应的彩色图, 高精误差图, 匹配后的模板图 ]
+            - LabelDetectResult类型的匹配结果
         @note: 
             本函数未来会做为并行运算的方法使用
         """
@@ -340,11 +424,8 @@ class MainWorkingFlow():
             shielded_areas=shielded_areas,
             show_diff=False
         )
-        
-        # 4. TODO: 判定初始相似度是否超标
-        logging.info("初始误差: " + str(loss))
 
-        # 5. 微调, TODO: 参数可调
+        # 4. 微调, TODO: 参数可调
         x, y, angle = self._checker.fine_tune(
             test=pattern, std=template_pattern,
             max_abs_x=20, max_abs_y=20, max_abs_a=1,
@@ -354,23 +435,23 @@ class MainWorkingFlow():
             show_process=False
         )
 
-        # 6. 获取微调后的样式
+        # 5. 获取微调后的样式
         target_pattern = self._checker.linear_trans_to(
             img=pattern, x=x, y=y, angle=angle, output_size=[template_pattern.shape[1], template_pattern.shape[0]], border_color=0
         )
 
-        # 7. 将模板分区微调到微调后的待测样式
+        # 6. 将模板分区微调到微调后的待测样式
         matched_template_pattern = self._checker.match_template_to_target_partitioned(
             template_pattern=template_pattern.copy(),
             target_pattern=target_pattern.copy(),
             shielded_areas=shielded_areas,
         )
 
-        # 8. 获得误差图像
+        # 7. 获得误差图像
         target_remain = self._checker.cut_with_tol(matched_template_pattern, target_pattern, thickness_tol, shielded_areas)
         template_remain = self._checker.cut_with_tol(target_pattern, matched_template_pattern, thickness_tol, shielded_areas)
         diff = cv2.bitwise_or(target_remain, template_remain)
-        ## 8.1 消除由于子区域匹配带来的误差
+        ## 7.1 消除由于子区域匹配带来的误差
         diff = cv2.bitwise_and(diff, cv2.absdiff(target_pattern, template_pattern))
         high_pre_diff = None
         if(gen_high_pre_diff):
@@ -378,11 +459,29 @@ class MainWorkingFlow():
             template_remain = self._checker.cut_with_tol(target_pattern, matched_template_pattern, 0, shielded_areas)
             high_pre_diff = cv2.bitwise_or(target_remain, template_remain)
 
-        # 9. 计算线性变换后原图
-        target_trans = self._checker.linear_trans_to(
+        # 8. 计算线性变换后原图
+        target_transed = self._checker.linear_trans_to(
             img=target_wraped, x=x, y=y, angle=angle, output_size=[template_pattern.shape[1], template_pattern.shape[0]], border_color=[255, 255, 255]
         )
-        return [ diff, target_trans, target_pattern, high_pre_diff, matched_template_pattern ]
+
+        # 9. 检测断墨缺陷
+        ink_defects = []
+        if(self._detector):
+            ink_defects = self._detector.detect(target_transed, template_defects=template_defects)
+
+        # 10. 填装运算结果
+        result = LabelDetectResult()
+        result.diff = diff
+        result.target_transed = target_transed
+        result.target_pattern = target_pattern
+        result.high_pre_diff = high_pre_diff
+        result.matched_template_pattern = matched_template_pattern
+        result.ink_defects = ink_defects
+        result.offset_x = x
+        result.offset_y = y
+        result.offset_angle = angle
+
+        return result
 
 
     def _draw_rect_on_src(self, 
@@ -399,12 +498,39 @@ class MainWorkingFlow():
             - label_angle: 目标标签的倾斜角度
             - label_w: 目标标签的宽度
             - label_h: 目标标签的高度
-            - x: 要绘制的方框的坐标
-            - y: 要绘制的方框的坐标
+            - x: 目标方框相对于线性变换后的标签的位置
+            - y: 目标方框相对于线性变换后的标签的位置
             - w: 要绘制的方框的宽度
             - h: 要绘制的方框的高度
         """
-        return src
+        angle_rad = np.deg2rad(label_angle)
+        sin_a = np.sin(angle_rad)
+        cos_a = np.cos(angle_rad)
+
+        # 目标方框中心点的绝对位置
+        center_x = label_x - (label_w / 2 - x) * sin_a - (label_h / 2 - y) * cos_a
+        center_y = label_y - (label_h / 2 - y) * sin_a + (label_w / 2 - x) * cos_a
+        src[round(center_y), round(center_x)] = (0, 0, 255)
+
+        # 四个顶点位置
+        top_left = (
+            round(center_x - w / 2 * sin_a - h / 2 * cos_a),
+            round(center_y - h / 2 * sin_a + w / 2 * cos_a)
+        )
+        top_right = (
+            round(center_x + w / 2 * sin_a - h / 2 * cos_a),
+            round(center_y - h / 2 * sin_a - w / 2 * cos_a)
+        )
+        button_left = (
+            round(center_x - w / 2 * sin_a + h / 2 * cos_a),
+            round(center_y + h / 2 * sin_a + w / 2 * cos_a)
+        )
+        button_right = (
+            round(center_x + w / 2 * sin_a + h / 2 * cos_a),
+            round(center_y + h / 2 * sin_a - w / 2 * cos_a)
+        )
+        return cv2.drawContours(src, [np.int_([button_right, button_left, top_left, top_right])], 0, (0, 0, 255), 2)
+    
 
     def _main(self):
         self._init()
@@ -449,8 +575,8 @@ class MainWorkingFlow():
                 with self._template_lock:
                     if(curr_template_id != self._template_id):
                         # 模板需要更新
-                        template_img = self._img_dict["模板原始图像"].copy()
-                        self._img_dict["模板图像"], self._img_dict["模板样式"] = self._process_template(
+                        template_img = self._template_src.copy()
+                        self._template_wrapped, self._template_pattern = self._process_template(
                             template_img=template_img,
                             threshold=params.depth_threshold,
                             h_min=params.h_min,
@@ -460,7 +586,7 @@ class MainWorkingFlow():
                             v_min=0,
                             v_max=255
                         )
-                        template_wraped = self._img_dict["模板图像"]
+                        template_wraped = self._template_wrapped
 
                         template_shielded_areas = self._template_shielded_areas.copy()
                         template_ocr_bar_code_pairs = self._template_ocr_bar_code_pairs.copy()
@@ -472,14 +598,14 @@ class MainWorkingFlow():
                         template_w = template_wraped.shape[1]
                         template_h = template_wraped.shape[0]
                         # 在UI中更新图像
-                        self._ui.set_graphic_widget(self._img_dict["模板图像"], GraphicWidgets.TemplateGraphicView)
+                        self._ui.set_graphic_widget(self._template_wrapped, GraphicWidgets.TemplateGraphicView)
                         curr_template_id = self._template_id
 
                 ## 检测、更新并同步待测图像
                 with self._target_lock:
                     if(curr_target_id != self._target_id):
                         # 目标需要更新
-                        target_img = self._img_dict["待检图像"].copy()
+                        target_img = self._target_src.copy()
 
                 ## 清除图像详情列表
                 self._ui.clear_graphic_details()
@@ -534,18 +660,19 @@ class MainWorkingFlow():
                 target_num = len(rects)
                 for r in rects:
                     # 1. 匹配标签并获得缺陷图
-                    diff, target_trans, pattern, high_pre_diff, matched_template_pattern = self._match_label( 
+                    result = self._match_label(
                         template_pattern=template_pattern,
                         target_img=target_img,
                         target_rect=r,
                         threshold=params.depth_threshold,
                         shielded_areas=template_shielded_areas,
                         thickness_tol=params.linear_error,
+                        template_defects=template_defects,
                         gen_high_pre_diff=params.export_high_pre_diff
                     )
 
                     # 计算误差
-                    loss = cv2.countNonZero(diff)
+                    loss = cv2.countNonZero(result.diff)
                     ## 判断阈值
                     similarity = (template_pattern_size - loss)/float(template_pattern_size)
                     logging.info("label: %d, final_loss: %d, similarity: %f"%(id, loss, similarity))
@@ -572,78 +699,106 @@ class MainWorkingFlow():
                         thickness=2
                     )
 
+
                     # 绘制误差点并输出图像
                     if(similarity * 100 > params.class_similarity):
                         ## 1. 同类标签中绘制误差点
-                        contours, hierarchy = cv2.findContours(diff, mode=cv2.RETR_TREE, method=cv2.CHAIN_APPROX_NONE)
+                        contours, hierarchy = cv2.findContours(result.diff, mode=cv2.RETR_TREE, method=cv2.CHAIN_APPROX_NONE)
                         for c in contours:
                             x, y, w, h = cv2.boundingRect(c)
                             size = w * h
                             if(size > params.defect_min_area):
                                 cv2.rectangle(
-                                    target_trans, 
+                                    result.target_transed, 
                                     (x - box_thickness, y - box_thickness), 
                                     (x + w + box_thickness, y + h + box_thickness), 
                                     (0, 0, 255), 
                                     box_thickness
                                 )
+                                ## 将结果绘制回原图
+                                target_img_with_mark = self._draw_rect_on_src(
+                                    src=target_img_with_mark,
+                                    label_x=r[0][0] + result.offset_x,
+                                    label_y=r[0][1] + result.offset_y,
+                                    label_angle=r[2] + result.offset_angle,
+                                    label_w=template_w,
+                                    label_h=template_h,
+                                    x=x - box_thickness,
+                                    y=y - box_thickness,
+                                    w=w + box_thickness * 2,
+                                    h=h + box_thickness * 2,
+                                )
                             logging.debug("label: %d, defect size: %d"%(id, w * h))
                         
-                        ## 2. 检测断墨缺陷
-                        ink_defects = []
-                        if(self._detector):
-                            ink_defects = self._detector.detect(target_trans, template_defects=template_defects)
-                            for defect in ink_defects:
-                                [x, y, w, h, confidence, cls] = defect
-                                logging.debug(defect)
-                                target_trans = cv2.rectangle(
-                                    target_trans, 
-                                    (round(x - box_thickness - w / 2), round(y - box_thickness - h / 2)), 
-                                    (round(x + box_thickness + w / 2), round(y + box_thickness + h / 2)), 
-                                    (0, 0, 255), 
-                                    box_thickness
-                                )
+                        ## 2. 标注断墨缺陷
+                        ink_defects = result.ink_defects
+                        for defect in ink_defects:
+                            [x, y, w, h, confidence, cls] = defect
+                            logging.debug(defect)
+                            result.target_transed = cv2.rectangle(
+                                result.target_transed, 
+                                (round(x - box_thickness - w / 2), round(y - box_thickness - h / 2)), 
+                                (round(x + box_thickness + w / 2), round(y + box_thickness + h / 2)), 
+                                (0, 0, 255), 
+                                box_thickness
+                            )
+                            ## 将结果绘制回原图
+                            target_img_with_mark = self._draw_rect_on_src(
+                                src=target_img_with_mark,
+                                label_x=r[0][0] + result.offset_x,
+                                label_y=r[0][1] + result.offset_y,
+                                label_angle=r[2] + result.offset_angle,
+                                label_w=template_w,
+                                label_h=template_h,
+                                x=x - box_thickness,
+                                y=y - box_thickness,
+                                w=w + box_thickness * 2,
+                                h=h + box_thickness * 2,
+                            )
 
                         # 3. 输出结果
                         ## 3.0 在操作ui之前确保程序没有被退出
                         if(self._stop_event.is_set()):
                             logging.info("main workflow exit.")
-                            
-                        ## 3.1 将结果绘制回原图
-                        #target_img_with_mark = self._draw_rect_on_src(
-                        #    src=target_img,
-                        #    label_x=
-                        #
+                            break
 
-                        ## 3.2 同步输出到UI
-                        self._ui.set_graphic_widget(target_img_with_mark, GraphicWidgets.MainGraphicView)
-                        ## 3.3 准备图像详情列表
-                        ### 3.3.1 显示标签详情
-                        if(params.export_defeats):
-                            self._ui.add_graphic_detail_to_list("id: " + str(id), target_trans)
-                        ### 3.3.2 显示标签打印样式
-                        if(params.export_pattern):
-                            pattern_bgr = cv2.cvtColor(pattern, cv2.COLOR_GRAY2BGR)
-                            self._ui.add_graphic_detail_to_list("id: " + str(id) + " 打印样式", pattern_bgr)
-                        ### 3.3.3 显示标签误差图
-                        if(params.export_diff):
-                            diff_bgr = cv2.cvtColor(diff, cv2.COLOR_GRAY2BGR)
-                            self._ui.add_graphic_detail_to_list("id: " + str(id) + " 误差图", diff_bgr)
-                        ### 3.3.4 显示标签高精度误差图
-                        if(high_pre_diff is not None):
-                            diff_high_pre_bgr = cv2.cvtColor(high_pre_diff, cv2.COLOR_GRAY2BGR)
-                            self._ui.add_graphic_detail_to_list("id: " + str(id) + " 高精误差图", diff_high_pre_bgr)
-                        ### 3.3.5 显示标签匹配后模板样式图
-                        if(params.export_matched_template):
-                            matched_template_pattern_bgr = cv2.cvtColor(matched_template_pattern, cv2.COLOR_GRAY2BGR)
-                            self._ui.add_graphic_detail_to_list("id: " + str(id) + " 匹配后模板样式图", matched_template_pattern_bgr)
+                        try:
+                            ## 3.2 同步输出到UI
+                            self._ui.set_graphic_widget(target_img_with_mark, GraphicWidgets.MainGraphicView)
+                            ## 3.3 准备图像详情列表
+                            ### 3.3.1 显示标签详情
+                            if(params.export_defeats):
+                                self._ui.add_graphic_detail_to_list("id: " + str(id), result.target_transed)
+                            ### 3.3.2 显示标签打印样式
+                            if(params.export_pattern):
+                                pattern_bgr = cv2.cvtColor(result.target_pattern, cv2.COLOR_GRAY2BGR)
+                                self._ui.add_graphic_detail_to_list("id: " + str(id) + " 打印样式", pattern_bgr)
+                            ### 3.3.3 显示标签误差图
+                            if(params.export_diff):
+                                diff_bgr = cv2.cvtColor(result.diff, cv2.COLOR_GRAY2BGR)
+                                self._ui.add_graphic_detail_to_list("id: " + str(id) + " 误差图", diff_bgr)
+                            ### 3.3.4 显示标签高精度误差图
+                            if(result.high_pre_diff is not None):
+                                diff_high_pre_bgr = cv2.cvtColor(result.high_pre_diff, cv2.COLOR_GRAY2BGR)
+                                self._ui.add_graphic_detail_to_list("id: " + str(id) + " 高精误差图", diff_high_pre_bgr)
+                            ### 3.3.5 显示标签匹配后模板样式图
+                            if(params.export_matched_template):
+                                matched_template_pattern_bgr = cv2.cvtColor(result.matched_template_pattern, cv2.COLOR_GRAY2BGR)
+                                self._ui.add_graphic_detail_to_list("id: " + str(id) + " 匹配后模板样式图", matched_template_pattern_bgr)
+                        except Exception as e:
+                            continue
 
                     # 输出进度到进度条
-                    self._ui.set_progress_bar_value(ProgressBarWidgts.CompareProgressBar, int((id + 1) * 100 / target_num))
+                    try:
+                        self._ui.set_progress_bar_value(ProgressBarWidgts.CompareProgressBar, int((id + 1) * 100 / target_num))
+                    except Exception as e:
+                        continue
                     id += 1
                 # 将进度条置为100%
-                self._ui.set_progress_bar_value(ProgressBarWidgts.CompareProgressBar, 100)
-
+                try:
+                    self._ui.set_progress_bar_value(ProgressBarWidgts.CompareProgressBar, 100)
+                except Exception as e:
+                    continue
             # Sleep 0.02s
             time.sleep(0.02)
         if(self._editor is not None):

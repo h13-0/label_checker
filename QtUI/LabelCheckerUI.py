@@ -119,7 +119,7 @@ class LabelCheckerUI(Ui_LabelChecker, QWidget):
         # ComboBox改变回调映射
         self._cb_changed_callback_map = {}
         # 参数改变的回调函数
-        self._param_callback = lambda: logging.warning("params_changed_callback not set.")
+        self._param_callback = lambda _: logging.warning("params_changed_callback not set.")
 
         # 默认参数
         self._param = CheckerUIParams()
@@ -220,7 +220,7 @@ class LabelCheckerUI(Ui_LabelChecker, QWidget):
         self.ExportDiffCheckBox.stateChanged.connect(lambda: self._check_box_changed_callback(self.ExportDiffCheckBox))
         self.ExportHighPreDiffCheckBox.stateChanged.connect(lambda: self._check_box_changed_callback(self.ExportHighPreDiffCheckBox))
         self.ExportMatchedTemplateCheckBox.stateChanged.connect(lambda: self._check_box_changed_callback(self.ExportMatchedTemplateCheckBox))
-        
+
 
     def _connect_param_widgets_signal(self, param_widget_map:dict):
         # 将Slider释放信号和SpinBox修改的信号连接到 `_param_changed_cb`

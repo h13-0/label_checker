@@ -1,4 +1,4 @@
-from QtUI.TemplateEditorUI import TemplateEditorUI, TemplateEditorButtonCallbacks, TemplateEditorGraphicViews
+from QtUI.TemplateEditorUI import TemplateEditorUI, TemplateEditorButtonCallbacks, TemplateEditorGraphicViews, EditorUIParams
 
 import os
 import time
@@ -15,6 +15,7 @@ from PyQt6.QtWidgets import QMainWindow, QFileDialog, QWidget, QMessageBox
 from QtUI.Widgets.MessageBox import MessageBox
 from LabelChecker.LabelChecker import LabelChecker
 from Utils.Config import Config
+from Utils.HSVFilter import HSVFilter
 from Template.Template import Template
 
 class TemplateEditor():
@@ -49,6 +50,13 @@ class TemplateEditor():
         if(len(template_name)):
             ## 导入template
             self._template = self._load_template(os.path.join(config.template_path, template_name))
+
+        # 加载HSVFilter
+        self._filter = HSVFilter()
+        
+        # 设置参数改变回调函数
+        self._param = EditorUIParams()
+        self._ui.set_params_changed_callback(self._param_changed_cb)
 
 
     def show(self):
@@ -91,18 +99,23 @@ class TemplateEditor():
                     self._input_changed = True
 
 
+    def _param_changed_cb(self, params:EditorUIParams):
+        self._param = params
+        with self._input_changed_lock:
+            self._input_changed = True
 
-    """
-    @brief: 窗口退出事件回调
-    """
+
     def _close_event(self):
+        """
+        @brief: 窗口退出事件回调
+        """
         self.exit()
 
 
-    """
-    @brief: 调用文件选择对话框选择文件
-    """
     def _open_file(self):
+        """
+        @brief: 调用文件选择对话框选择文件
+        """
         fname, ftype = QFileDialog.getOpenFileName(self._ui, "Open File", "./", "All Files(*)")
         if(len(fname) == 0):
             logging.warning("No file select.")
@@ -129,22 +142,22 @@ class TemplateEditor():
                     self._input_changed = True
 
 
-    """
-    @brief: 处理模板图像
-    @param:
-        - template_img: 模板图像
-        - threshold: 标签图像黑度阈值
-    @return:
-        - 返回值为处理后的结果所构成的list
-            [
-                template_wraped,
-                template_partten
-            ]
-    """
     def _process_template(self, 
             template_img, threshold:int, 
             h_min:int, h_max:int, s_min:int, s_max:int, v_min:int, v_max:int
         ) -> list:
+        """
+        @brief: 处理模板图像
+        @param:
+            - template_img: 模板图像
+            - threshold: 标签图像黑度阈值
+        @return:
+            - 返回值为处理后的结果所构成的list
+                [
+                    template_wraped,
+                    template_partten
+                ]
+        """
         # 1. 先找到标准标签的区域
         min_rect = self._checker.find_label(
             img=template_img, 
@@ -195,18 +208,28 @@ class TemplateEditor():
                 if(not isinstance(template_img, np.ndarray)):
                     continue
 
+                ## 1. 填装HSVFilter参数
+                self._filter.h_high = self._param.h_max
+                self._filter.h_low = self._param.h_min
+                self._filter.s_high = self._param.s_max
+                self._filter.s_low = self._param.s_min
+                ## 2. 执行HSVFilter
+                filtered = self._filter.filter(template_img)
+                ## 3. 将过滤后的图像输出到UI
+                self._ui.set_graphic_widget(filtered, TemplateEditorGraphicViews.InputGraphicView)
+
                 template_wraped, template_pattern = self._process_template(
                     template_img=template_img,
                     threshold=170,
-                    h_min=0,
-                    h_max=170,
-                    s_min=13,
-                    s_max=255,
+                    h_min=self._param.h_min,
+                    h_max=self._param.h_max,
+                    s_min=self._param.s_min,
+                    s_max=self._param.s_max,
                     v_min=0,
                     v_max=255
                 )  
 
-                self._ui.set_graphic_widget(template_img, TemplateEditorGraphicViews.InputGraphicView)
+                
                 self._ui.set_graphic_widget(template_wraped, TemplateEditorGraphicViews.TemplateGraphicView)
             
                 if(not area_inited):

@@ -11,24 +11,24 @@ import threading
 import cv2
 
 from PyQt6.QtCore import pyqtSignal, pyqtSlot, Qt, QRectF, QPointF
-from PyQt6.QtWidgets import QWidget, QGraphicsScene, QGraphicsPixmapItem, QGraphicsView, QInputDialog, QMessageBox
+from PyQt6.QtWidgets import QWidget, QGraphicsScene, QGraphicsPixmapItem, QGraphicsView, QInputDialog, QMessageBox, QSlider, QSpinBox, QApplication
 from PyQt6.QtGui import QPixmap, QImage, QColor, QStandardItemModel, QStandardItem
 
 from QtUI.Widgets.DraggableResizableRect import DraggableResizableRect
 from Utils.Config import Config
 
 
-"""
-@brief: 按钮事件回调
-"""
 class TemplateEditorButtonCallbacks(Enum):
+    """
+    @brief: 按钮事件回调
+    """
     OpenTemplatePhotoClicked = 1
 
 
-"""
-@brief: GraphicView控件枚举
-"""
 class TemplateEditorGraphicViews(Enum):
+    """
+    @brief: GraphicView控件枚举
+    """
     InputGraphicView = 1
     TemplateGraphicView = 2
 
@@ -59,6 +59,35 @@ class OCR_BarcodePairs():
         self._barcode_area = None
 
 
+class _param_changed_source(Enum):
+    HMinChagned = 1
+    HMaxChanged = 2
+    SMinChanged = 3
+    SMaxChanged = 4
+    DepthThresholdChanged = 5
+
+
+class EditorUIParams():
+    """
+    @brief: 参数区运行参数结构体
+    @param:
+        - h_min: 标签色块寻找时最低色相值
+        - h_max: 标签色块寻找时最高色相值
+        - s_min: 标签色块寻找时最低饱和度
+        - s_max: 标签色块寻找时最高饱和度
+        - depth_threshold: 标签的打印样式黑度阈值
+    """
+    def __init__(self, 
+        h_min:int = 0, h_max:int = 170, s_min:int = 13, s_max:int = 255,
+        depth_threshold:int = 130
+    ) -> None:
+        self.h_min = h_min
+        self.h_max = h_max
+        self.s_min = s_min
+        self.s_max = s_max
+        self.depth_threshold = depth_threshold
+
+
 class TemplateEditorUI(Ui_TemplateEditor, QWidget):
     # 定义Qt信号
     _update_graphic_signal = pyqtSignal(QImage, TemplateEditorGraphicViews)
@@ -82,6 +111,12 @@ class TemplateEditorUI(Ui_TemplateEditor, QWidget):
         self._next_ocr_barcode_comparison_pairs_id = 0
         self._areas_lock = threading.Lock()
         
+        # 默认参数
+        self._param = EditorUIParams()
+
+        # 参数改变时的回调函数
+        self._param_callback = lambda _: logging.warning("params_changed_callback not set.")
+
 
     def _wheel_event(self, widget, event):
         """
@@ -161,9 +196,53 @@ class TemplateEditorUI(Ui_TemplateEditor, QWidget):
         
         self._template_shape = None
 
+        # 初始化slider及spinbox
+        self._bind_slider_spin_to_callback(self.HMinSlider, self.HMinSpinBox, _param_changed_source.HMinChagned)
+        self._bind_slider_spin_to_callback(self.HMaxSlider, self.HMaxSpinBox, _param_changed_source.HMaxChanged)
+        self._bind_slider_spin_to_callback(self.SMinSlider, self.SMinSpinBox, _param_changed_source.SMinChanged)
+        self._bind_slider_spin_to_callback(self.SMaxSlider, self.SMaxSpinBox, _param_changed_source.SMaxChanged)
+        self._bind_slider_spin_to_callback(self.DepthThresholdSlider, self.DepthThresholdSpinBox, _param_changed_source.DepthThresholdChanged)
+
         # 窗口关闭回调函数
         self._save_template_cb = lambda:logging.debug("The callback function for save template is not set.")
         self._window_closed_cb = lambda:logging.debug("The callback function for closing the window is not set.")
+
+
+    def _bind_slider_spin_to_callback(self, slider:QSlider, spin:QSpinBox, source:_param_changed_source):
+        """
+        @brief: 绑定slider、spin, 并将其绑定到对应的callback上
+        """
+        slider.valueChanged.connect(lambda:spin.setValue(slider.value()))
+        slider.sliderReleased.connect(lambda source=source, slider=slider, spin=spin:self._param_changed_cb(source, slider, spin))
+        spin.valueChanged.connect(lambda source=source, slider=slider, spin=spin:self._param_changed_cb(source, slider, spin))
+
+
+    @pyqtSlot(_param_changed_source, QSlider, QSpinBox)
+    def _param_changed_cb(self, source:_param_changed_source, slider:QSlider, spin:QSpinBox):
+        """
+        @brief: 参数区变化的槽函数
+        """
+        # 过滤掉由于Slider改变导致的SpinBox改变引发的信号
+        if(
+            (QApplication.focusWidget() == spin) or
+            (not slider.isSliderDown())
+        ):
+            # 如果是SpinBox的更改, 则需要同步到Slider
+            if(QApplication.focusWidget() == spin):
+                slider.setValue(spin.value())
+            # 更新数值到params
+            match source:
+                case _param_changed_source.HMinChagned:
+                    self._param.h_min = slider.value()
+                case _param_changed_source.HMaxChanged:
+                    self._param.h_max = slider.value()
+                case _param_changed_source.SMinChanged:
+                    self._param.s_min = slider.value()
+                case _param_changed_source.SMaxChanged:
+                    self._param.s_max = slider.value()
+                case _param_changed_source.DepthThresholdChanged:
+                    self._param.depth_threshold = self.DepthThresholdSlider.value()
+            self._param_callback(self._param)
 
 
     @pyqtSlot(int, int, int, int)
@@ -274,6 +353,10 @@ class TemplateEditorUI(Ui_TemplateEditor, QWidget):
         w = cv2_img.shape[1]
         frame = QImage(rgb_img, w, h, w * 3, QImage.Format.Format_RGB888)
         self._update_graphic_signal.emit(frame, target)
+
+
+    def set_params_changed_callback(self, callback):
+        self._param_callback = callback
 
 
     def _rect_changed_event(self, area:ShieldedArea, change, value):

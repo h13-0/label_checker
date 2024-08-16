@@ -10,7 +10,7 @@ class LabelChecker():
 
 
     def find_label(self, 
-        img, h_min:int, h_max:int, s_min:int, s_max:int, v_min:int, v_max:int,
+        img:np.ndarray, h_min:int, h_max:int, s_min:int, s_max:int, v_min:int, v_max:int,
         show_mask:bool = False
     ):
         '''
@@ -39,7 +39,7 @@ class LabelChecker():
 
 
     def find_labels(self, 
-        img, template_w:int, template_h:int,
+        img:np.ndarray, template_w:int, template_h:int,
         h_min:int, h_max:int, s_min:int, s_max:int, v_min:int, v_max:int,
         wh_tol_ratio:float = 0.1, show_mask:bool = False
     ):
@@ -129,7 +129,7 @@ class LabelChecker():
         return result
 
 
-    def wrap_min_aera_rect(self, src, min_area_rect):
+    def wrap_min_aera_rect(self, src:np.ndarray, min_area_rect):
         '''
         @brief: 将 minAreaRect 所在区域仿射并裁切到长方形
         @note: 该函数会自动将图像旋转到正确的方向
@@ -163,7 +163,7 @@ class LabelChecker():
         return cv2.warpPerspective(src, matrix, (int(w), int(h)))
 
 
-    def get_pattern(self, wraped_img, threshold:int, shielded_areas:list=None):
+    def get_pattern(self, wraped_img:np.ndarray, threshold:int, shielded_areas:list=None):
         """
         @brief: 将经过仿射变换的标签图像转化为样式二值图
         @param:
@@ -205,7 +205,7 @@ class LabelChecker():
         return target_pattern
 
 
-    def linear_trans_to(self, img, x:int, y:int, angle:float, output_size:list = [-1, -1], border_color = [0, 0, 0]):
+    def linear_trans_to(self, img:np.ndarray, x:int, y:int, angle:float, output_size:list = [-1, -1], border_color = [0, 0, 0]):
         '''
         @brief: 将图像进行线性变换, 边缘用黑色填充
         @param:
@@ -258,7 +258,7 @@ class LabelChecker():
         return trans
 
 
-    def try_match(self, img1, img2, x:int, y:int, angle, shielded_areas:list=None, show_diff = False) -> int:
+    def try_match(self, img1:np.ndarray, img2:np.ndarray, x:int, y:int, angle, shielded_areas:list=None, show_diff = False) -> int:
         '''
         @brief: 将待测图像以指定线性变换匹配到标准图像上, 用于二值图匹配
         @param:
@@ -284,7 +284,7 @@ class LabelChecker():
 
 
 
-    def fine_tune(self, test, std, max_abs_x:int, max_abs_y:int, max_abs_a:float, max_iterations, 
+    def fine_tune(self, test:np.ndarray, std:np.ndarray, max_abs_x:int, max_abs_y:int, max_abs_a:float, max_iterations, 
         shielded_areas:list=None, angle_step = 0.1, view_size:int = 2, show_process:bool = False
     ):
         '''
@@ -497,7 +497,7 @@ class LabelChecker():
 
 
 
-    def cut_with_tol(self, img1, img2, tolerance:int, shielded_areas:list=None):
+    def cut_with_tol(self, img1:np.ndarray, img2:np.ndarray, tolerance:int, shielded_areas:list=None):
         '''
         @brief: 膨胀相切算法, 用img1来切img2, 返回img2剩余部分, 使用时要交替互相相切最终得误差图
         @note: 图像均为二值图
@@ -520,7 +520,7 @@ class LabelChecker():
         return remain
 
 
-    def match_template_to_target_partitioned(self, template_pattern, target_pattern, shielded_areas:list=None):
+    def match_template_to_target_partitioned(self, template_pattern:np.ndarray, target_pattern:np.ndarray, shielded_areas:list=None):
         """
         @brief: 将模板分区匹配到目标样式上, 并返回分区匹配后的结果
         @param:
@@ -644,7 +644,7 @@ class InkDefectDetector():
         return output
 
 
-    def detect(self, img, confidence_thre:float = 0.2, template_defects:list = []) -> list:
+    def detect(self, img:np.ndarray, confidence_thre:float = 0.2, template_defects:list = []) -> list:
         """
         @brief: 检测待检图像的断墨缺陷
         @param:
@@ -673,7 +673,7 @@ class InkDefectDetector():
         output = self._sesson.run(output_names, {input_name: img})[0]
 
         # 模型后处理
-        defects = self._postprocess(output, scale)
+        defects = self._postprocess(output, scale, confidence_thre)
 
         # 和模板进行比对
         if(len(template_defects)):
