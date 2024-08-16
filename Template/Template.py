@@ -155,6 +155,14 @@ class Template():
         self._configs["hsv_threshold"] = hsv_thre
 
 
+    def get_depth_threshold(self) -> int:
+        return self._configs.get("depth_threshold", 0)
+
+
+    def set_depth_threshold(self, threshold:int):
+        self._configs["depth_threshold"] = threshold
+
+
     def save(self):
         """
         将Template示例保存到指定路径中

@@ -30,10 +30,13 @@ class LabelChecker():
         max_area_rect = None
         for c in contours:
             minRect  = cv2.minAreaRect(c)
+            #minRect = self.fix_min_aera_rect(minRect)
             size = minRect[1][0] * minRect[1][1]
             if(size > max_size):
                 max_size = size
                 max_area_rect = minRect
+
+        logging.info(max_area_rect)
 
         return max_area_rect
 
@@ -64,31 +67,43 @@ class LabelChecker():
         contours, hierarchy = cv2.findContours(mask, mode=cv2.RETR_TREE, method=cv2.CHAIN_APPROX_NONE)
         rects = []
         for c in contours:
-            minRect  = cv2.minAreaRect(c)
+            minRect = cv2.minAreaRect(c)
+            #minRect = self.fix_min_aera_rect(minRect)
             w = max(minRect[1][0], minRect[1][1])
             h = min(minRect[1][0], minRect[1][1])
-
+            #h = minRect[1][1]
             if(
                 abs((w / float(template_w)) - 1) < wh_tol_ratio and
                 abs((h / float(template_h)) - 1) < wh_tol_ratio
             ):
-                rects.append(cv2.minAreaRect(c))
+                rects.append(minRect)
+                logging.info(minRect)
 
         return rects
 
 
-    def check_min_aera_rect(self, min_area_rect) -> bool:
+    def fix_min_aera_rect(self, min_area_rect:tuple) -> tuple:
         '''
-        @brief: 该函数主要用于检测标签的 minAreaRect 倾角是否小于30
+        @brief: 该函数主要用于修复角度错误的问题
+        @return:
+            ((x, y), (w, h), angle)
+        @note: angle定义与opencv中一致, 为从x方向逆时针旋转所重合到的第一条边的角度
         '''
-        angle = min_area_rect[2]
-        if(abs(angle) > 30 and abs(angle) < 60):
-            return False
-        else:
-            return True
+        tl, tr, bl, br = self.get_box_point(min_area_rect)
+
+        x = (tl[0] + tr[0] + bl[0] + br[0]) / 4.0
+        y = (tl[1] + tr[1] + bl[1] + br[1]) / 4.0
+        w = math.sqrt(math.pow(tl[0] - tr[0], 2) + math.pow(tl[1] - tr[1], 2))
+        h = math.sqrt(math.pow(tl[0] - bl[0], 2) + math.pow(tl[1] - bl[1], 2))
+        angle = 0
+        try:
+            angle = math.acos((tr[0] - tl[0]) / w) / math.pi * 180.0
+        except Exception as e:
+            angle = math.nan
+        return ((x, y), (w, h), angle)
 
 
-    def _get_box_point(self, min_area_rect) -> list:
+    def get_box_point(self, min_area_rect:tuple) -> list:
         """
         @brief: 将min_area_rect转换为四个顶点, 横方向为长边并且输出顺序为: [左上 右上 左下 右下],
         @return:
@@ -142,7 +157,7 @@ class LabelChecker():
             h = min_area_rect[1][0]
 
         # 计算仿射前四个顶点位置
-        points = self._get_box_point(min_area_rect)
+        points = self.get_box_point(min_area_rect)
         src_array = np.array(
             [
                 # 左上、右上

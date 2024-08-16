@@ -1,6 +1,7 @@
 import threading
 import os
 import time
+import math
 import cv2
 import numpy as np
 import logging
@@ -497,7 +498,7 @@ class MainWorkingFlow():
             - src: 原待测图像
             - label_x: 目标标签中心点在原图像上的位置
             - label_y: 目标标签中心点在原图像上的位置
-            - label_angle: 目标标签的倾斜角度
+            - label_angle: 目标标签的倾斜角度, 定义为标签从正姿态顺时针旋转的角度
             - label_w: 目标标签的宽度
             - label_h: 目标标签的高度
             - x: 目标方框相对于线性变换后的标签的位置
@@ -508,28 +509,30 @@ class MainWorkingFlow():
         angle_rad = np.deg2rad(label_angle)
         sin_a = np.sin(angle_rad)
         cos_a = np.cos(angle_rad)
+        center_x = label_x - (label_w / 2 - x) * cos_a + (label_h / 2 - y) * sin_a
+        center_y = label_y - (label_h / 2 - y) * cos_a - (label_w / 2 - x) * sin_a
 
-        # 目标方框中心点的绝对位置
-        center_x = label_x - (label_w / 2 - x) * sin_a - (label_h / 2 - y) * cos_a
-        center_y = label_y - (label_h / 2 - y) * sin_a + (label_w / 2 - x) * cos_a
-        src[round(center_y), round(center_x)] = (0, 0, 255)
+        src[
+            max(min(round(center_y), src.shape[0] - 1), 0), 
+            max(min(round(center_x), src.shape[1] - 1), 0)
+        ] = (0, 0, 255)
 
         # 四个顶点位置
         top_left = (
-            round(center_x - w / 2 * sin_a - h / 2 * cos_a),
-            round(center_y - h / 2 * sin_a + w / 2 * cos_a)
+            round(center_x - w / 2 * cos_a + h / 2 * sin_a),
+            round(center_y - h / 2 * cos_a - w / 2 * sin_a)
         )
         top_right = (
-            round(center_x + w / 2 * sin_a - h / 2 * cos_a),
-            round(center_y - h / 2 * sin_a - w / 2 * cos_a)
+            round(center_x + w / 2 * cos_a + h / 2 * sin_a),
+            round(center_y - h / 2 * cos_a + w / 2 * sin_a)
         )
         button_left = (
-            round(center_x - w / 2 * sin_a + h / 2 * cos_a),
-            round(center_y + h / 2 * sin_a + w / 2 * cos_a)
+            round(center_x - w / 2 * cos_a - h / 2 * sin_a),
+            round(center_y + h / 2 * cos_a - w / 2 * sin_a)
         )
         button_right = (
-            round(center_x + w / 2 * sin_a + h / 2 * cos_a),
-            round(center_y + h / 2 * sin_a - w / 2 * cos_a)
+            round(center_x + w / 2 * cos_a - h / 2 * sin_a),
+            round(center_y + h / 2 * cos_a + w / 2 * sin_a)
         )
         return cv2.drawContours(src, [np.int_([button_right, button_left, top_left, top_right])], 0, (0, 0, 255), 2)
     
@@ -569,10 +572,12 @@ class MainWorkingFlow():
             if(input_changed):
                 params = None
                 template_conf = None
+                hsv_thres = None
                 # 拷贝一份参数
                 with self._params_lock:
                     params = self._params
                     template_conf = self._template_conf
+                    hsv_thres = template_conf.get_hsv_threshold()
 
                 # 输入参数发生变化, 重新执行检测标签
                 ## 检测、更新并同步模板图像
@@ -580,7 +585,6 @@ class MainWorkingFlow():
                     if(curr_template_id != self._template_id):
                         # 模板需要更新
                         template_img = self._template_src.copy()
-                        hsv_thres = template_conf.get_hsv_threshold()
                         self._template_wrapped, self._template_pattern = self._process_template(
                             template_img=template_img,
                             threshold=params.depth_threshold,
@@ -650,12 +654,12 @@ class MainWorkingFlow():
                     target_img,
                     template_w=template_w,
                     template_h=template_h,
-                    h_min=params.h_min,
-                    h_max=params.h_max,
-                    s_min=params.s_min,
-                    s_max=params.s_max,
-                    v_min=0,
-                    v_max=255,
+                    h_min=hsv_thres["h_min"],
+                    h_max=hsv_thres["h_max"],
+                    s_min=hsv_thres["s_min"],
+                    s_max=hsv_thres["s_max"],
+                    v_min=hsv_thres["v_min"],
+                    v_max=hsv_thres["v_max"],
                     wh_tol_ratio=0.1
                 )
 
@@ -675,6 +679,7 @@ class MainWorkingFlow():
                         template_defects=template_defects,
                         gen_high_pre_diff=params.export_high_pre_diff
                     )
+                    logging.info(r)
 
                     # 计算误差
                     loss = cv2.countNonZero(result.diff)
@@ -707,7 +712,20 @@ class MainWorkingFlow():
 
                     # 绘制误差点并输出图像
                     if(similarity * 100 > params.class_similarity):
-                        ## 1. 同类标签中绘制误差点
+                        # 0. 修复opencv中的标签旋转度数定义
+                        angle = 0
+                        tl, tr, bl, br = self._checker.get_box_point(r)
+                        if(tl[1] < tr[1]):
+                            # 标签顺时针倾斜
+                            angle = math.acos(abs(tr[0] - tl[0]) / max(r[1][0], r[1][1])) / math.pi * 180.0 + result.offset_angle
+                        else:
+                            # 标签逆时针倾斜
+                            logging.info(r[1][0])
+                            logging.info(r[1][1])
+                            logging.info(abs(tr[0] - tl[0]) / r[1][0])
+                            angle = - (math.acos(abs(tr[0] - tl[0]) / max(r[1][0], r[1][1])) / math.pi * 180.0) + result.offset_angle
+                        
+                        # 1. 同类标签中绘制误差点
                         contours, hierarchy = cv2.findContours(result.diff, mode=cv2.RETR_TREE, method=cv2.CHAIN_APPROX_NONE)
                         for c in contours:
                             x, y, w, h = cv2.boundingRect(c)
@@ -721,11 +739,12 @@ class MainWorkingFlow():
                                     box_thickness
                                 )
                                 ## 将结果绘制回原图
+
                                 target_img_with_mark = self._draw_rect_on_src(
                                     src=target_img_with_mark,
                                     label_x=r[0][0] + result.offset_x,
                                     label_y=r[0][1] + result.offset_y,
-                                    label_angle=r[2] + result.offset_angle,
+                                    label_angle=angle,
                                     label_w=template_w,
                                     label_h=template_h,
                                     x=x - box_thickness,
@@ -752,7 +771,7 @@ class MainWorkingFlow():
                                 src=target_img_with_mark,
                                 label_x=r[0][0] + result.offset_x,
                                 label_y=r[0][1] + result.offset_y,
-                                label_angle=r[2] + result.offset_angle,
+                                label_angle=angle,
                                 label_w=template_w,
                                 label_h=template_h,
                                 x=x - box_thickness,
