@@ -36,8 +36,6 @@ class LabelChecker():
                 max_size = size
                 max_area_rect = minRect
 
-        logging.info(max_area_rect)
-
         return max_area_rect
 
 
@@ -77,7 +75,6 @@ class LabelChecker():
                 abs((h / float(template_h)) - 1) < wh_tol_ratio
             ):
                 rects.append(minRect)
-                logging.info(minRect)
 
         return rects
 

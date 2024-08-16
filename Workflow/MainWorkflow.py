@@ -679,7 +679,7 @@ class MainWorkingFlow():
                         template_defects=template_defects,
                         gen_high_pre_diff=params.export_high_pre_diff
                     )
-                    logging.info(r)
+                    logging.info("labels: " + str(r))
 
                     # 计算误差
                     loss = cv2.countNonZero(result.diff)
@@ -720,9 +720,6 @@ class MainWorkingFlow():
                             angle = math.acos(abs(tr[0] - tl[0]) / max(r[1][0], r[1][1])) / math.pi * 180.0 + result.offset_angle
                         else:
                             # 标签逆时针倾斜
-                            logging.info(r[1][0])
-                            logging.info(r[1][1])
-                            logging.info(abs(tr[0] - tl[0]) / r[1][0])
                             angle = - (math.acos(abs(tr[0] - tl[0]) / max(r[1][0], r[1][1])) / math.pi * 180.0) + result.offset_angle
                         
                         # 1. 同类标签中绘制误差点
