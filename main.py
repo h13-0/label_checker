@@ -45,4 +45,4 @@ if __name__ == '__main__':
 
     ret = app.exec()
     stop_event.set()
-    exit(ret)
+    sys.exit(ret)
