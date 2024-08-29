@@ -31,6 +31,7 @@ class TemplateEditorGraphicViews(Enum):
     """
     InputGraphicView = 1
     TemplateGraphicView = 2
+    PatternGraphicsView = 3
 
 
 class ShieldedArea():
@@ -182,10 +183,12 @@ class TemplateEditorUI(Ui_TemplateEditor, QWidget):
         self._graphic_views = {
             "InputGraphicView": self.InputGraphicView,
             "TemplateGraphicView": self.TemplateGraphicView,
+            "PatternGraphicsView": self.PatternGraphicsView,
         }
         self._graphic_views_scenes = {
             "InputGraphicView": QGraphicsScene(),
             "TemplateGraphicView": QGraphicsScene(),
+            "PatternGraphicsView": QGraphicsScene(),
         }
         for widget in self._graphic_views:
             self._graphic_views[widget].setScene(
@@ -481,6 +484,17 @@ class TemplateEditorUI(Ui_TemplateEditor, QWidget):
 
     def add_shielded_area(self, x1:int, y1:int, x2:int, y2:int):
         self._add_shield_area_signal[int, int, int, int].emit(x1, y1, x2, y2)
+
+
+    def add_template_to_table(self, name:str):
+        pass
+
+
+    def delete_template_by_name(self, name:str):
+        pass
+
+    def set_delete_template_callback(self, callback):
+        pass
 
 
     def set_window_closed_callback(self, callback):

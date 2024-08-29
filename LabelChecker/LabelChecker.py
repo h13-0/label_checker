@@ -705,8 +705,8 @@ class InkDefectDetector():
                         # 未丢失
                         lost = False
                         break
-                if(lost):
-                    img_lost.append(out)
+                    if(lost):
+                        img_lost.append(out)
 
             # 忽略defects中与template中重复的元素
             output = img_lost

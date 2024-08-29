@@ -489,53 +489,52 @@ class MainWorkingFlow():
 
     def _draw_rect_on_src(self, 
         src, 
-        label_x, label_y, label_angle, label_w, label_h,
+        min_area_rect, offset_x, offset_y, offset_a,
         x, y, w, h
     ):
         """
         @brief: 将方框画回原图像
         @param:
             - src: 原待测图像
-            - label_x: 目标标签中心点在原图像上的位置
-            - label_y: 目标标签中心点在原图像上的位置
-            - label_angle: 目标标签的倾斜角度, 定义为标签从正姿态顺时针旋转的角度
-            - label_w: 目标标签的宽度
-            - label_h: 目标标签的高度
+
             - x: 目标方框相对于线性变换后的标签的位置
             - y: 目标方框相对于线性变换后的标签的位置
             - w: 要绘制的方框的宽度
             - h: 要绘制的方框的高度
         """
-        angle_rad = np.deg2rad(label_angle)
-        sin_a = np.sin(angle_rad)
-        cos_a = np.cos(angle_rad)
-        center_x = label_x - (label_w / 2 - x) * cos_a + (label_h / 2 - y) * sin_a
-        center_y = label_y - (label_h / 2 - y) * cos_a - (label_w / 2 - x) * sin_a
 
-        src[
-            max(min(round(center_y), src.shape[0] - 1), 0), 
-            max(min(round(center_x), src.shape[1] - 1), 0)
-        ] = (0, 0, 255)
+        tl, tr, bl, br = self._checker.get_box_point(min_area_rect)
 
-        # 四个顶点位置
+        # 记alpha为长边与x轴所构成的角度，box逆时针偏转为正
+        cos_a = float(tr[0] - tl[0]) / (math.sqrt(math.pow(tr[0] - tl[0], 2) + math.pow(tr[1] - tl[1], 2)))
+        sin_a = float(tr[1] - tl[1]) / (math.sqrt(math.pow(tr[0] - tl[0], 2) + math.pow(tr[1] - tl[1], 2)))
+
+        x += offset_x
+        y += offset_y
+        logging.info("offsetx: " + str(offset_x))
+        logging.info("offsety: " + str(offset_y))
+        logging.info("offseta: " + str(offset_a))
+
+        # 目标方框的四个顶点位置
         top_left = (
-            round(center_x - w / 2 * cos_a + h / 2 * sin_a),
-            round(center_y - h / 2 * cos_a - w / 2 * sin_a)
+            math.floor(tl[0] + cos_a * (x - w / 2) - sin_a * (y - h / 2)),
+            math.floor(tl[1] + sin_a * (x - w / 2) + cos_a * (y - h / 2))
         )
         top_right = (
-            round(center_x + w / 2 * cos_a + h / 2 * sin_a),
-            round(center_y - h / 2 * cos_a + w / 2 * sin_a)
+            math.ceil(tl[0] + cos_a * (x + w / 2) - sin_a * (y - h / 2)),
+            math.floor(tl[1] + sin_a * (x + w / 2) + cos_a * (y - h / 2))
         )
         button_left = (
-            round(center_x - w / 2 * cos_a - h / 2 * sin_a),
-            round(center_y + h / 2 * cos_a - w / 2 * sin_a)
+            math.floor(tl[0] + cos_a * (x - w / 2) - sin_a * (y + h / 2)),
+            math.ceil(tl[1] + sin_a * (x - w / 2) + cos_a * (y + h / 2))
         )
         button_right = (
-            round(center_x + w / 2 * cos_a - h / 2 * sin_a),
-            round(center_y + h / 2 * cos_a + w / 2 * sin_a)
+            math.ceil(tl[0] + cos_a * (x + w / 2) - sin_a * (y + h / 2)),
+            math.ceil(tl[1] + sin_a * (x + w / 2) + cos_a * (y + h / 2))
         )
+
         return cv2.drawContours(src, [np.int_([button_right, button_left, top_left, top_right])], 0, (0, 0, 255), 2)
-    
+
 
     def _main(self):
         self._init()
@@ -711,17 +710,7 @@ class MainWorkingFlow():
 
 
                     # 绘制误差点并输出图像
-                    if(similarity * 100 > params.class_similarity):
-                        # 0. 修复opencv中的标签旋转度数定义
-                        angle = 0
-                        tl, tr, bl, br = self._checker.get_box_point(r)
-                        if(tl[1] < tr[1]):
-                            # 标签顺时针倾斜
-                            angle = math.acos(abs(tr[0] - tl[0]) / max(r[1][0], r[1][1])) / math.pi * 180.0 + result.offset_angle
-                        else:
-                            # 标签逆时针倾斜
-                            angle = - (math.acos(abs(tr[0] - tl[0]) / max(r[1][0], r[1][1])) / math.pi * 180.0) + result.offset_angle
-                        
+                    if(similarity * 100 > params.class_similarity):                        
                         # 1. 同类标签中绘制误差点
                         contours, hierarchy = cv2.findContours(result.diff, mode=cv2.RETR_TREE, method=cv2.CHAIN_APPROX_NONE)
                         for c in contours:
@@ -739,11 +728,10 @@ class MainWorkingFlow():
 
                                 target_img_with_mark = self._draw_rect_on_src(
                                     src=target_img_with_mark,
-                                    label_x=r[0][0] + result.offset_x,
-                                    label_y=r[0][1] + result.offset_y,
-                                    label_angle=angle,
-                                    label_w=template_w,
-                                    label_h=template_h,
+                                    min_area_rect=r,
+                                    offset_x=result.offset_x,
+                                    offset_y=result.offset_y,
+                                    offset_a=result.offset_angle,
                                     x=x - box_thickness,
                                     y=y - box_thickness,
                                     w=w + box_thickness * 2,
@@ -766,11 +754,10 @@ class MainWorkingFlow():
                             ## 将结果绘制回原图
                             target_img_with_mark = self._draw_rect_on_src(
                                 src=target_img_with_mark,
-                                label_x=r[0][0] + result.offset_x,
-                                label_y=r[0][1] + result.offset_y,
-                                label_angle=angle,
-                                label_w=template_w,
-                                label_h=template_h,
+                                min_area_rect=r,
+                                offset_x=result.offset_x,
+                                offset_y=result.offset_y,
+                                offset_a=result.offset_angle,
                                 x=x - box_thickness,
                                 y=y - box_thickness,
                                 w=w + box_thickness * 2,

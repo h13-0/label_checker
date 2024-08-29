@@ -5,7 +5,6 @@ import time
 import threading
 import re
 import logging
-from types import MethodType
 
 import cv2
 import numpy as np
@@ -220,7 +219,7 @@ class TemplateEditor():
 
                 template_wraped, template_pattern = self._process_template(
                     template_img=template_img,
-                    threshold=170,
+                    threshold=self._param.depth_threshold,
                     h_min=self._param.h_min,
                     h_max=self._param.h_max,
                     s_min=self._param.s_min,
@@ -229,8 +228,10 @@ class TemplateEditor():
                     v_max=255
                 )  
 
-                
                 self._ui.set_graphic_widget(template_wraped, TemplateEditorGraphicViews.TemplateGraphicView)
+
+                ## 4. 绘制pattern
+                self._ui.set_graphic_widget(template_pattern, TemplateEditorGraphicViews.PatternGraphicsView)
             
                 if(not area_inited):
                     for area in self._shielded_areas:

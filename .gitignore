@@ -4,3 +4,6 @@ dist
 log
 templates
 dataset
+weights/runs
+*.onnx
+*.pt
