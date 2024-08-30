@@ -33,7 +33,6 @@ class MessageBox(QObject):
 
 
     def exec(self):
-        print(f"Current thread name: {threading.current_thread().name}")
         if(threading.current_thread().name == "MainThread"):
             self._make_msg_box()
         else:
