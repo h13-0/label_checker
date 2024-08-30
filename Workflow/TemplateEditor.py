@@ -5,17 +5,21 @@ import time
 import threading
 import re
 import logging
+import tempfile
 
 import cv2
 import numpy as np
 
-from PyQt6.QtWidgets import QMainWindow, QFileDialog, QWidget, QMessageBox
+from PyQt6.QtWidgets import QMainWindow, QFileDialog, QWidget, QMessageBox, QInputDialog
 
 from QtUI.Widgets.MessageBox import MessageBox
+from QtUI.Widgets.InputDialog import InputDialog
 from LabelChecker.LabelChecker import LabelChecker
 from Utils.Config import Config
 from Utils.HSVFilter import HSVFilter
 from Template.Template import Template
+from BarTender.BarTender import BarTender
+from Seagull.BarTender.Print import Engine, Printers, LabelFormatDocument, ImageType, ColorDepth, Resolution, OverwriteOptions
 
 class TemplateEditor():
     def __init__(self, config:Config, parent:QWidget, template_name:str = "", template_list:list=[]):
@@ -30,10 +34,14 @@ class TemplateEditor():
         self._checker = LabelChecker()
         self._main_thread = None
 
-        # 模板图像及其互斥锁
-        self._template_img = None
-        self._template_img_id = 0
-        self._template_lock = threading.Lock()
+        # BarTender图像及其互斥锁
+        self._tender_img = None
+        self._tender_img_id = 0
+        self._tender_img_lock = threading.Lock()
+        # 样本图像及其互斥锁
+        self._sample_img = None
+        self._sample_img_id = 0
+        self._sample_img_lock = threading.Lock()
 
         # 输入参数指示变量
         self._input_changed = False
@@ -52,10 +60,6 @@ class TemplateEditor():
 
         # 加载HSVFilter
         self._filter = HSVFilter()
-        
-        # 设置参数改变回调函数
-        self._param = EditorUIParams()
-        self._ui.set_params_changed_callback(self._param_changed_cb)
 
 
     def show(self):
@@ -65,7 +69,10 @@ class TemplateEditor():
 
         # 连接回调函数
         ## 按钮回调函数
-        self._ui.set_btn_callback(TemplateEditorButtonCallbacks.OpenTemplatePhotoClicked, self._open_template_photo_cb)
+        self._ui.set_btn_callback(TemplateEditorButtonCallbacks.OpenImageSampleClicked, self._open_image_sample_cb)
+        self._ui.set_btn_callback(TemplateEditorButtonCallbacks.SpecifyBarTenderTemplatePathClicked, self._open_bartender_template_cb)
+        self._ui.set_btn_callback(TemplateEditorButtonCallbacks.AddBarcodeSourceClicked, self._add_barcode_source_cb)
+        self._ui.set_btn_callback(TemplateEditorButtonCallbacks.DeleteBarcodeSourceClicked, self._del_barcode_source_cb)
 
         ## 保存事件回调函数
         self._ui.set_save_template_callback(self._save_callback)
@@ -73,18 +80,24 @@ class TemplateEditor():
         ## 窗口关闭回调函数
         self._ui.set_window_closed_callback(self._close_event)
 
+        # 设置参数改变回调函数
+        self._param = EditorUIParams()
+        self._ui.set_params_changed_callback(self._param_changed_cb)
 
     def set_exit_callback(self, callback):
         self._exit_cb = callback
 
 
     def _load_template(self, save_path:str) -> Template:
+        """
+        @brief: 加载模板的函数
+        """
         template = None
         template_img = None
         success = False
         try:
             template = Template.open(save_path)
-            template_img = cv2.imread(template.get_img_path())
+            template_img = cv2.imread(template.get_img_sample_path())
             self._shielded_areas = template.get_shielded_areas()
             success = True
         except Exception as e:
@@ -120,25 +133,121 @@ class TemplateEditor():
             logging.warning("No file select.")
         return fname
     
-    
-    def _open_template_photo_cb(self):
-        target_img_file = self._open_file()
+
+    def _open_bartender_template_cb(self):
+        tender_template_file = self._open_file()
         success = False
-        if(len(target_img_file)):
-            with self._template_lock:
+        if(len(tender_template_file)):
+            with self._tender_img_lock:
                 try:
-                    self._template_img = cv2.imread(target_img_file)
-                    if(self._template_img is not None):
-                        self._template_img_id += 1
+                    with tempfile.TemporaryDirectory() as temp_dir:
+                        # 准备图片路径
+                        path = os.path.join(temp_dir, "bartender_img.jpg")
+                        # 生成模板的format
+                        format = self._tender.gen_format(tender_template_file)
+                        # 导出图片到路径
+                        self._tender.export_format_to_img_file(
+                            format=format,
+                            path=path,
+                            img_type=ImageType.JPEG,
+                            color_depth=ColorDepth.ColorDepth24bit,
+                            res=Resolution(1080, 1080)
+                        )
+                        # 读取图片
+                        self._tender_img = cv2.imread(path)
+
+                    if(self._tender_img is not None):
+                        self._tender_img_id += 1
                         success = True
                     else:
-                        self._ui.make_msg_box("错误", "文件或文件路径错误, 请检查该文件是否为图片或路径是否不包含中文")
+                        MessageBox(
+                            parent=self._ui,
+                            title="错误",
+                            content="读取BarTender模板文件错误",
+                            icon=QMessageBox.Icon.Critical,
+                            button=QMessageBox.StandardButton.Yes
+                        ).exec()
                 except Exception as e:
                     logging.error(e)
         
             if(success):
                 with self._input_changed_lock:
                     self._input_changed = True
+
+    
+    def _open_image_sample_cb(self):
+        target_img_file = self._open_file()
+        success = False
+        if(len(target_img_file)):
+            with self._sample_img_lock:
+                try:
+                    self._sample_img = cv2.imread(target_img_file)
+                    if(self._sample_img is not None):
+                        self._sample_img_id += 1
+                        success = True
+                    else:
+                        MessageBox(
+                            parent=self._ui,
+                            title="错误",
+                            content="文件或文件路径错误, 请检查该文件是否为图片或路径是否不包含中文",
+                            icon=QMessageBox.Icon.Critical,
+                            button=QMessageBox.StandardButton.Yes
+                        ).exec()
+                except Exception as e:
+                    logging.error(e)
+        
+            if(success):
+                with self._input_changed_lock:
+                    self._input_changed = True
+
+
+    def _add_barcode_source_cb(self):
+        """
+        @brief: 按下 "添加条码数据源" 按钮的回调函数
+        @note:
+            该函数会弹窗, 并获取用户输入的数据源ID。
+        """
+        input_dialog = InputDialog(
+            parent=self._ui,
+            title="数据源名称",
+            label_text="请输入与BarTender中相同的数据源名称",
+            input_mode=QInputDialog.InputMode.TextInput
+        )
+        input_dialog.exec()
+        if(input_dialog.ok_pressed()):
+            id = input_dialog.get_input_text()
+            if(len(id)):
+                sources = []
+                sources += self._ui.get_barcode_sources()
+                sources += self._ui.get_ocr_sources()
+                duplicated = False
+                for i in range(len(sources)):
+                    if(sources[i].get_id() == id):
+                        duplicated = True
+                        break
+                if(not duplicated):
+                    self._ui.add_barcode_source(id, 0, 0, 100, 50)
+                else:
+                    MessageBox(
+                        parent=self._ui,
+                        title="错误",
+                        content="数据源ID重复!",
+                        icon=QMessageBox.Icon.Critical,
+                        button=QMessageBox.StandardButton.Yes
+                    ).exec()
+            else:
+                MessageBox(
+                    parent=self._ui,
+                    title="错误",
+                    content="请输入数据源ID!",
+                    icon=QMessageBox.Icon.Critical,
+                    button=QMessageBox.StandardButton.Yes
+                ).exec()
+
+
+    def _del_barcode_source_cb(self):
+        for target_id in self._ui.get_selected_barcode_sources():
+            self._ui.del_barcode_source(target_id)
 
 
     def _process_template(self, 
@@ -183,9 +292,16 @@ class TemplateEditor():
 
 
     def _main(self):
+        # 准备BarTender Engine
+        self._tender = BarTender()
+
         # 模板原图
-        template_img = None
-        curr_template_id = 0
+        sample_img = None
+        curr_sample_img_id = 0
+
+        tender_img = None
+        curr_tender_img_id = 0
+
         area_inited = False
         while(not self._stop_event.is_set()):
             # 检测是否需要开启下一批计算
@@ -197,14 +313,28 @@ class TemplateEditor():
             # 当输入发生变化
             if(input_changed):
                 # 输入参数发生变化, 重新执行检测标签
-                ## 检测、更新并同步模板图像
-                with self._template_lock:
-                    if(curr_template_id != self._template_img_id):
-                        # 模板图像需要更新
-                        template_img = self._template_img.copy()
+                ## 检测、更新并同步模板及其图像
+                with self._tender_img_lock:
+                    if(curr_tender_img_id != self._tender_img_id):
+                        tender_img = self._tender_img.copy()
+
+                ## 检测、更新并同步样本图像
+                with self._sample_img_lock:
+                    if(curr_sample_img_id != self._sample_img_id):
+                        # 样本图像需要更新
+                        sample_img = self._sample_img.copy()
                 
                 ## 检查运行条件是否满足
-                if(not isinstance(template_img, np.ndarray)):
+                cond_satisfied = True
+                if(isinstance(tender_img, np.ndarray)):
+                    self._ui.set_graphic_widget(tender_img, TemplateEditorGraphicViews.TenderGraphicsView)
+                else:
+                    cond_satisfied = False
+
+                if(not isinstance(sample_img, np.ndarray)):
+                    cond_satisfied = False
+                
+                if(not cond_satisfied):
                     continue
 
                 ## 1. 填装HSVFilter参数
@@ -213,12 +343,12 @@ class TemplateEditor():
                 self._filter.s_high = self._param.s_max
                 self._filter.s_low = self._param.s_min
                 ## 2. 执行HSVFilter
-                filtered = self._filter.filter(template_img)
+                filtered = self._filter.filter(sample_img)
                 ## 3. 将过滤后的图像输出到UI
                 self._ui.set_graphic_widget(filtered, TemplateEditorGraphicViews.InputGraphicView)
 
                 template_wraped, template_pattern = self._process_template(
-                    template_img=template_img,
+                    template_img=sample_img,
                     threshold=self._param.depth_threshold,
                     h_min=self._param.h_min,
                     h_max=self._param.h_max,
@@ -228,7 +358,7 @@ class TemplateEditor():
                     v_max=255
                 )  
 
-                self._ui.set_graphic_widget(template_wraped, TemplateEditorGraphicViews.TemplateGraphicView)
+                self._ui.set_graphic_widget(template_wraped, TemplateEditorGraphicViews.SampleGraphicView)
 
                 ## 4. 绘制pattern
                 self._ui.set_graphic_widget(template_pattern, TemplateEditorGraphicViews.PatternGraphicsView)
@@ -315,7 +445,7 @@ class TemplateEditor():
         ## 创建模板对象
         if(self._template is None):
             self._template = Template(save_path)
-        self._template.set_img_type("jpg")
+
         ## 导出HSV阈值
         self._template.set_hsv_threshold(
             h_min=self._param.h_min,
