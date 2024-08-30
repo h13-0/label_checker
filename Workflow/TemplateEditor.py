@@ -19,7 +19,7 @@ from Utils.Config import Config
 from Utils.HSVFilter import HSVFilter
 from Template.Template import Template
 from BarTender.BarTender import BarTender
-from Seagull.BarTender.Print import Engine, Printers, LabelFormatDocument, ImageType, ColorDepth, Resolution, OverwriteOptions
+from Seagull.BarTender.Print import ImageType, ColorDepth, Resolution
 
 class TemplateEditor():
     def __init__(self, config:Config, parent:QWidget, template_name:str = "", template_list:list=[]):
@@ -73,6 +73,8 @@ class TemplateEditor():
         self._ui.set_btn_callback(TemplateEditorButtonCallbacks.SpecifyBarTenderTemplatePathClicked, self._open_bartender_template_cb)
         self._ui.set_btn_callback(TemplateEditorButtonCallbacks.AddBarcodeSourceClicked, self._add_barcode_source_cb)
         self._ui.set_btn_callback(TemplateEditorButtonCallbacks.DeleteBarcodeSourceClicked, self._del_barcode_source_cb)
+        self._ui.set_btn_callback(TemplateEditorButtonCallbacks.AddOCR_SourceClicked, self._add_ocr_source_cb)
+        self._ui.set_btn_callback(TemplateEditorButtonCallbacks.DeleteOCR_SourceClicked, self._del_ocr_source_cb)
 
         ## 保存事件回调函数
         self._ui.set_save_template_callback(self._save_callback)
@@ -209,7 +211,7 @@ class TemplateEditor():
         """
         input_dialog = InputDialog(
             parent=self._ui,
-            title="数据源名称",
+            title="条码数据源",
             label_text="请输入与BarTender中相同的数据源名称",
             input_mode=QInputDialog.InputMode.TextInput
         )
@@ -246,8 +248,67 @@ class TemplateEditor():
 
 
     def _del_barcode_source_cb(self):
+        """
+        @brief: 按下 "删除条码数据源" 按钮的回调函数
+        @note:
+            该函数会删除条码数据源表格中所有被选中的数据源
+        """
         for target_id in self._ui.get_selected_barcode_sources():
-            self._ui.del_barcode_source(target_id)
+            self._ui.del_source(target_id)
+
+
+    def _add_ocr_source_cb(self):
+        """
+        @brief: 按下 "添加OCR数据源" 按钮的回调函数
+        @note:
+            该函数会弹窗, 并获取用户输入的数据源ID。
+        """
+        input_dialog = InputDialog(
+            parent=self._ui,
+            title="OCR数据源",
+            label_text="请输入与BarTender中相同的数据源名称",
+            input_mode=QInputDialog.InputMode.TextInput
+        )
+        input_dialog.exec()
+        if(input_dialog.ok_pressed()):
+            id = input_dialog.get_input_text()
+            if(len(id)):
+                sources = []
+                sources += self._ui.get_barcode_sources()
+                sources += self._ui.get_ocr_sources()
+                duplicated = False
+                for i in range(len(sources)):
+                    if(sources[i].get_id() == id):
+                        duplicated = True
+                        break
+                if(not duplicated):
+                    self._ui.add_ocr_sources(id, 0, 0, 100, 50)
+                else:
+                    MessageBox(
+                        parent=self._ui,
+                        title="错误",
+                        content="数据源ID重复!",
+                        icon=QMessageBox.Icon.Critical,
+                        button=QMessageBox.StandardButton.Yes
+                    ).exec()
+            else:
+                MessageBox(
+                    parent=self._ui,
+                    title="错误",
+                    content="请输入数据源ID!",
+                    icon=QMessageBox.Icon.Critical,
+                    button=QMessageBox.StandardButton.Yes
+                ).exec()
+
+
+    def _del_ocr_source_cb(self):
+        """
+        @brief: 按下 "删除OCR数据源" 按钮的回调函数
+        @note:
+            该函数会删除条码数据源表格中所有被选中的数据源
+        """
+        for target_id in self._ui.get_selected_ocr_sources():
+            self._ui.del_source(target_id)
 
 
     def _process_template(self, 

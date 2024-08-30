@@ -24,8 +24,8 @@ class TemplateEditorButtonCallbacks(Enum):
     OpenImageSampleClicked              = 2
     AddBarcodeSourceClicked             = 3
     DeleteBarcodeSourceClicked          = 4
-    AddOCRSourceClicked                 = 5
-    DeleteOCRSourceClicked              = 6
+    AddOCR_SourceClicked                = 5
+    DeleteOCR_SourceClicked             = 6
 
 
 class TemplateEditorGraphicViews(Enum):
@@ -105,8 +105,12 @@ class EditorUIParams():
 class TemplateEditorUI(Ui_TemplateEditor, QWidget):
     # 定义Qt信号
     _update_graphic_signal = pyqtSignal(QImage, TemplateEditorGraphicViews)
+    ## 添加数据源
     _add_barcode_source_signal = pyqtSignal(str, int, int, int, int)
-    _del_barcode_source_signal = pyqtSignal(str)
+    _add_ocr_source_signal = pyqtSignal(str, int, int, int, int)
+    ## 删除数据源可共用, 因为两个数据源的ID不能重复
+    _del_source_signal = pyqtSignal(str)
+    
     def __init__(self, config:Config, name:str = "", template_list:list=[]):
         Ui_TemplateEditor.__init__(self)
         QWidget.__init__(self)
@@ -163,25 +167,18 @@ class TemplateEditorUI(Ui_TemplateEditor, QWidget):
         self.BarcodeSourcesList.setColumnWidth(3, 75)
         self.BarcodeSourcesList.setColumnWidth(4, 75)
 
-        self._ocr_barcode_list_module = QStandardItemModel(self.OCR_BarcodePairsList)
-        self._ocr_barcode_list_module.setHorizontalHeaderItem(0, QStandardItem("Barcode x1"))
-        self._ocr_barcode_list_module.setHorizontalHeaderItem(1, QStandardItem("Barcode y1"))
-        self._ocr_barcode_list_module.setHorizontalHeaderItem(2, QStandardItem("Barcode x2"))
-        self._ocr_barcode_list_module.setHorizontalHeaderItem(3, QStandardItem("Barcode y2"))
-        self._ocr_barcode_list_module.setHorizontalHeaderItem(4, QStandardItem("OCR x1"))
-        self._ocr_barcode_list_module.setHorizontalHeaderItem(5, QStandardItem("OCR y1"))
-        self._ocr_barcode_list_module.setHorizontalHeaderItem(6, QStandardItem("OCR x2"))
-        self._ocr_barcode_list_module.setHorizontalHeaderItem(7, QStandardItem("OCR y2"))
-        self.OCR_BarcodePairsList.setModel(self._ocr_barcode_list_module)
-        self.OCR_BarcodePairsList.resizeColumnToContents(0)
-        self.OCR_BarcodePairsList.resizeColumnToContents(1)
-        self.OCR_BarcodePairsList.resizeColumnToContents(2)
-        self.OCR_BarcodePairsList.resizeColumnToContents(3)
-        self.OCR_BarcodePairsList.resizeColumnToContents(4)
-        self.OCR_BarcodePairsList.resizeColumnToContents(5)
-        self.OCR_BarcodePairsList.resizeColumnToContents(6)
-        self.OCR_BarcodePairsList.resizeColumnToContents(7)
-
+        self._ocr_source_list_module = QStandardItemModel(self.OCR_SourcesList)
+        self._ocr_source_list_module.setHorizontalHeaderItem(0, QStandardItem("数据源ID"))
+        self._ocr_source_list_module.setHorizontalHeaderItem(1, QStandardItem("x1"))
+        self._ocr_source_list_module.setHorizontalHeaderItem(2, QStandardItem("y1"))
+        self._ocr_source_list_module.setHorizontalHeaderItem(3, QStandardItem("x2"))
+        self._ocr_source_list_module.setHorizontalHeaderItem(4, QStandardItem("y2"))
+        self.OCR_SourcesList.setModel(self._ocr_source_list_module)
+        self.OCR_SourcesList.setColumnWidth(0, 75)
+        self.OCR_SourcesList.setColumnWidth(1, 75)
+        self.OCR_SourcesList.setColumnWidth(2, 75)
+        self.OCR_SourcesList.setColumnWidth(3, 75)
+        self.OCR_SourcesList.setColumnWidth(4, 75)
 
         # 连接信号槽
         ## 连接按钮信号
@@ -190,13 +187,15 @@ class TemplateEditorUI(Ui_TemplateEditor, QWidget):
         self.OpenImageSample.clicked.connect(lambda:self._btn_callbacks(TemplateEditorButtonCallbacks.OpenImageSampleClicked))
         self.AddBarcodeSource.clicked.connect(lambda:self._btn_callbacks(TemplateEditorButtonCallbacks.AddBarcodeSourceClicked))
         self.DeleteBarcodeSource.clicked.connect(lambda:self._btn_callbacks(TemplateEditorButtonCallbacks.DeleteBarcodeSourceClicked))
-        self.AddOCRSource.clicked.connect(lambda:self._btn_callbacks(TemplateEditorButtonCallbacks.AddBarcodeSourceClicked))
-        self.DeleteOCRSource.clicked.connect(lambda:self._btn_callbacks(TemplateEditorButtonCallbacks.DeleteBarcodeSourceClicked))
+        self.AddOCR_Source.clicked.connect(lambda:self._btn_callbacks(TemplateEditorButtonCallbacks.AddOCR_SourceClicked))
+        self.DeleteOCR_Source.clicked.connect(lambda:self._btn_callbacks(TemplateEditorButtonCallbacks.DeleteOCR_SourceClicked))
 
         ## 连接自定义信号
         self._update_graphic_signal.connect(self._update_graphic_view, type=Qt.ConnectionType.BlockingQueuedConnection)
-        self._add_barcode_source_signal.connect(self._add_barcode_source_area, type=Qt.ConnectionType.QueuedConnection)
-        self._del_barcode_source_signal.connect(self._del_barcode_source_slot, type=Qt.ConnectionType.QueuedConnection)
+        self._add_barcode_source_signal.connect(self._add_barcode_source_slot, type=Qt.ConnectionType.QueuedConnection)
+        self._add_ocr_source_signal.connect(self._add_ocr_source_slot, type=Qt.ConnectionType.QueuedConnection)
+
+        self._del_source_signal.connect(self._del_source_slot, type=Qt.ConnectionType.QueuedConnection)
 
         # 初始化GraphicView映射
         self._graphic_views = {
@@ -272,9 +271,9 @@ class TemplateEditorUI(Ui_TemplateEditor, QWidget):
 
 
     @pyqtSlot(str, int, int, int, int)
-    def _add_barcode_source_area(self, id:str, x1:int, y1:int, x2:int, y2:int):
+    def _add_barcode_source_slot(self, id:str, x1:int, y1:int, x2:int, y2:int):
         """
-        向模板中增加屏蔽区域方框
+        @brief: 向模板中添加条码数据源区域
         """
         rect = DraggableResizableRect(
             x=x1, 
@@ -303,11 +302,44 @@ class TemplateEditorUI(Ui_TemplateEditor, QWidget):
             self._barcode_sources.append(area)
             # 配置回调函数
             rect.mouseReleaseEvent = MethodType(self._rect_release_event, area)
-            #rect.itemChange = MethodType(self._rect_changed_event, rect)
+
+
+    @pyqtSlot(str, int, int, int, int)
+    def _add_ocr_source_slot(self, id:str, x1:int, y1:int, x2:int, y2:int):
+        """
+        @brief: 向模板中添加OCR数据源区域
+        """
+        rect = DraggableResizableRect(
+            x=x1, 
+            y=y1, 
+            width=x2-x1, 
+            height=y2-y1,
+            fill_color=QColor(0, 0, 0, 50),
+            edge_color=QColor(0, 0, 0, 100),
+            edge_size=5
+        )
+        # 向scene中添加item
+        self._graphic_views_scenes[TemplateEditorGraphicViews.TenderGraphicsView.name].addItem(rect)
+        
+        # 向ListView中添加元素
+        with self._sources_lock:
+            row = len(self._ocr_sources)
+            self._ocr_source_list_module.setItem(row, 0, QStandardItem(id))
+            self._ocr_source_list_module.setItem(row, 1, QStandardItem(str(x1)))
+            self._ocr_source_list_module.setItem(row, 2, QStandardItem(str(y1)))
+            self._ocr_source_list_module.setItem(row, 3, QStandardItem(str(x2)))
+            self._ocr_source_list_module.setItem(row, 4, QStandardItem(str(y2)))
+
+            # 转为辅助对象
+            area = ImageArea(rect, id)
+            # 存入数据源数组
+            self._ocr_sources.append(area)
+            # 配置回调函数
+            rect.mouseReleaseEvent = MethodType(self._rect_release_event, area)
 
 
     @pyqtSlot(str)
-    def _del_barcode_source_slot(self, id:str):
+    def _del_source_slot(self, id:str):
         """
         @brief: 删除条码源的槽函数
         """
@@ -320,13 +352,13 @@ class TemplateEditorUI(Ui_TemplateEditor, QWidget):
                 # 如果匹配，删除整行
                 self._barcode_source_list_module.removeRow(row)
 
-        for row in range(self._ocr_barcode_list_module.rowCount() - 1, -1, -1):
+        for row in range(self._ocr_source_list_module.rowCount() - 1, -1, -1):
             # 获取指定行和列的项
-            item = self._ocr_barcode_list_module.item(row, 0)
+            item = self._ocr_source_list_module.item(row, 0)
             # 检查该项的值是否与给定值相匹配
             if item and item.text() == id:
                 # 如果匹配，删除整行
-                self._ocr_barcode_list_module.removeRow(row)
+                self._ocr_source_list_module.removeRow(row)
 
         # 删除list中数据
         with self._sources_lock:
@@ -450,15 +482,7 @@ class TemplateEditorUI(Ui_TemplateEditor, QWidget):
         """
         @brief: 鼠标松开事件, 用于边界检测
         """
-        rect = None
-        if(isinstance(area, ImageArea)):
-            rect = area.get_widget()
-        else:
-            # todo
-            pass
-        logging.debug("rect: " + str(rect.rect()))
-        logging.debug("pos: " + str(rect.scenePos()))
-        logging.debug("img shape: " + str(self._bartender_img_shape))
+        rect = area.get_widget()
         DraggableResizableRect.mouseReleaseEvent(rect, event)
 
         x1, y1, x2, y2 = self._get_coor_from_rect(rect)
@@ -482,8 +506,11 @@ class TemplateEditorUI(Ui_TemplateEditor, QWidget):
             self._barcode_source_list_module.setItem(row, 3, QStandardItem(str(round(x2))))
             self._barcode_source_list_module.setItem(row, 4, QStandardItem(str(round(y2))))
         elif(area in ocr_sources):
-            # todo
-            pass
+            row = ocr_sources.index(ocr_sources.get_id())
+            self._ocr_source_list_module.setItem(row, 1, QStandardItem(str(round(x1))))
+            self._ocr_source_list_module.setItem(row, 2, QStandardItem(str(round(y1))))
+            self._ocr_source_list_module.setItem(row, 3, QStandardItem(str(round(x2))))
+            self._ocr_source_list_module.setItem(row, 4, QStandardItem(str(round(y2))))
 
 
     def _window_close_event(self, window, event):
@@ -496,7 +523,6 @@ class TemplateEditorUI(Ui_TemplateEditor, QWidget):
         ok_pressed = dialog.exec()
         if(ok_pressed): 
             name = dialog.textValue()
-            #if(self._save_template(name)):
             if(self._save_template_cb(name)):
                 self._window_closed_cb()
                 event.accept()
@@ -549,8 +575,18 @@ class TemplateEditorUI(Ui_TemplateEditor, QWidget):
         return selected_ids
 
 
-    def del_barcode_source(self, target_id:str):
-        self._del_barcode_source_signal.emit(target_id)
+    def add_ocr_sources(self, id:str, x1:int, y1:int, x2:int, y2:int):
+        """
+        @brief: 增加OCR数据源
+        @param:
+            - id: 数据源ID名称
+            - x1: 左上角x轴坐标
+            - y1: 左上角y轴坐标
+            - x2: 右下角x轴坐标
+            - y2: 右下角y轴坐标
+        """
+        self._add_ocr_source_signal.emit(id, x1, y1, x2, y2)
+
 
     def get_ocr_sources(self) -> list:
         """
@@ -560,6 +596,29 @@ class TemplateEditorUI(Ui_TemplateEditor, QWidget):
         with self._sources_lock:
             ocr_sources = copy.deepcopy(self._ocr_sources)
         return ocr_sources
+
+
+    def get_selected_ocr_sources(self) -> list:
+        """
+        @brief: 获取当前在列表中选中的OCR数据源
+        @return:
+            由id(str)组成的list
+        """
+        # TODO: 确保在主线程中读取UI控件
+        selected_indexs = self.OCR_SourcesList.selectionModel().selectedIndexes()
+        selected_ids = []
+
+        for index in selected_indexs:
+            selected_ids.append(self._ocr_source_list_module.item(index.row(), 0).text())
+
+        return selected_ids
+
+
+    def del_source(self, target_id:str):
+        """
+        @brief: 删除指定id对应的数据源
+        """
+        self._del_source_signal.emit(target_id)
 
 
     def add_template_to_table(self, name:str):
@@ -579,5 +638,4 @@ class TemplateEditorUI(Ui_TemplateEditor, QWidget):
 
     def set_save_template_callback(self, callback):
         self._save_template_cb = callback
-
 

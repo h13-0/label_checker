@@ -536,7 +536,7 @@
          </widget>
         </item>
         <item>
-         <widget class="QTableView" name="OCR_BarcodePairsList"/>
+         <widget class="QTableView" name="OCR_SourcesList"/>
         </item>
         <item>
          <layout class="QHBoxLayout" name="horizontalLayout_2">
@@ -544,7 +544,7 @@
            <number>0</number>
           </property>
           <item>
-           <widget class="QPushButton" name="AddOCRSource">
+           <widget class="QPushButton" name="AddOCR_Source">
             <property name="minimumSize">
              <size>
               <width>0</width>
@@ -557,7 +557,7 @@
            </widget>
           </item>
           <item>
-           <widget class="QPushButton" name="DeleteOCRSource">
+           <widget class="QPushButton" name="DeleteOCR_Source">
             <property name="minimumSize">
              <size>
               <width>0</width>
