@@ -18,7 +18,7 @@ class BarTender():
         return printer_list
 
 
-    def gen_format(self, template_path:str, data_dict:dict) -> LabelFormatDocument:
+    def gen_format(self, template_path:str, data_dict:dict={}) -> LabelFormatDocument:
         """
         @brief: 根据data_dict中指定的数据源信息创建打印样式
         @param: 

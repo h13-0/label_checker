@@ -238,8 +238,9 @@ class MainWorkingFlow():
 
 
     def _template_changed_cb(self, id:int, curr_template:str):
-        """目标模板更改事件回调函数
-        Note: 回调函数一定会在主线程中被执行, 因此部分变量无需加锁
+        """
+        @brief: 目标模板更改事件回调函数
+        @note: 回调函数一定会在主线程中被执行, 因此部分变量无需加锁
         """
         logging.info("template target changed to: %s, id: %d", curr_template, id)
         self._template_id = id
@@ -251,7 +252,7 @@ class MainWorkingFlow():
             with self._template_lock:
                 try:
                     # 读取图像
-                    self._template_src = cv2.imread(self._template_conf.get_img_path())
+                    self._template_src = cv2.imread(self._template_conf.get_img_sample_path())
                     # 导入屏蔽区域
                     for area in self._template_conf.get_shielded_areas():
                         self._template_shielded_areas.append((
