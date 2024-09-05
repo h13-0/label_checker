@@ -4,3 +4,5 @@ dist
 log
 templates
 dataset
+*.onnx
+*.pt

@@ -297,7 +297,7 @@ class LabelChecker():
 
 
     def fine_tune(self, test:np.ndarray, std:np.ndarray, max_abs_x:int, max_abs_y:int, max_abs_a:float, max_iterations, 
-        shielded_areas:list=None, angle_step = 0.1, view_size:int = 2, show_process:bool = False
+        shielded_areas:list=None, angle_accu = 0.1, view_size:int = 2, show_process:bool = False
     ):
         '''
         @brief: 将待测图像(test)通过线性变换微调到模板(std)上。
@@ -308,7 +308,7 @@ class LabelChecker():
             - max_abs_y: y轴最大微调像素数(绝对值)
             - max_abs_a: 最大旋转角角度数(绝对值)
             - max_iterations: 最大微调迭代数
-            - angle_step: 每步角度微调幅度
+            - angle_accu: 旋转角调整精度, 当angle_accu<0时为跳过旋转角匹配
             - view_size: 视野边距: 
                 例如边距为为1时, 对应视野矩阵为3x3, 视野行向量长度为3
                 例如边距为为2时, 对应视野矩阵为5x5, 视野行向量长度为5
@@ -340,10 +340,20 @@ class LabelChecker():
         xy_loss = np.full((matrix_size, matrix_size), -1)
         # 旋转角度损失矩阵, 未计算点为-1
         angle_loss = np.full(matrix_size, -1)
+        curr_angle_step = max_abs_a / float(view_size)
 
         # 定义结束变量
+        ## 基本逻辑：
+        ### 1. 匹配xy offset至最优, 并记录在匹配过程中xy offset是否改变
+        ### 2. 匹配angle offset至最优, 并记录在匹配过程中angle offset是否改变
+        ### 3. 若xy offset、angle offset均未改变, 则抵达全局最优, 结束运行。否则回到步骤1。
+        ## 变量含义
+        ### complete用于指示xy和angle单次匹配是否结束
         xy_complete = False
         angle_complete = False
+        ### changed用于指示offset是否改变
+        xy_changed = False
+        angle_changed = False
         while(iterations < max_iterations):
             iterations += 1
             
@@ -394,6 +404,12 @@ class LabelChecker():
                 delta_x = next_x - curr_x
                 delta_y = next_y - curr_y
                 
+                # 检测xy offset是否发生变化
+                if(delta_x == 0 and delta_y == 0):
+                    xy_changed = False
+                else:
+                    xy_changed = True
+
                 # 将x、y指向loss更低的位置, 并更新loss矩阵(用-1填充矩阵)
                 if(delta_x < 0):
                     # 中心向左移动abs(delta_x)个坐标点, 矩阵向右移动abs(delta_x)个坐标点
@@ -432,61 +448,107 @@ class LabelChecker():
                 ## 当矩阵未发生更新时结束匹配(此时矩阵无负值)
                 if(xy_loss.min() >= 0):
                     xy_complete = True
+
+                # 判定结束条件
+                if(xy_changed):
+                    # 如果xy发生移动, 则重新匹配angle offset
+                    angle_complete = False
+                    angle_changed = False
+                else:
+                    # 如果angle和xy都未发生移动, 则抵达最优结束匹配
+                    if(angle_changed == False):
+                        break
             elif(angle_complete == False):
-                # 更新loss向量并寻找loss最小的angle值
-                min_da = 0
+                # 0. 检测是否需要进行旋转角匹配
+                if(angle_accu <= 0):
+                    ## 跳过匹配
+                    angle_complete = True
+                    angle_changed = False
+                    continue
+                # 1. 更新loss向量并寻找loss最小的angle值
+                ## min_loss为本次更新后, 损失向量中最小的loss值
                 min_loss = -1
+                ## min_da为本次更新后, 损失向量中最小的loss值相对于中心的index偏移量
+                ## 例如min_loss在中心偏左2个单位, 则min_da=-2
+                min_da = 0
                 for i in range(matrix_size):
                     if(angle_loss[i] < 0):
                         angle_loss[i] = self.try_match(
                             test, std, 
                             x=curr_x, 
                             y=curr_y, 
-                            angle=curr_a + (i - view_size) * angle_step,
+                            angle=curr_a + (i - view_size) * curr_angle_step,
                             shielded_areas=shielded_areas
                         )
                     if((min_loss < 0) or (angle_loss[i] < min_loss)):
                         min_loss = angle_loss[i]
                         min_da = i - view_size
-
-                # 当中心也为最小值时则不移动
+                ## 当中心也为最小值时则不移动
                 if(angle_loss[view_size] == min_loss):
                     min_da = 0
 
+                # 2. 输出计算结果
                 logging.debug("angle loss vector: %s"%(angle_loss))
                 logging.debug("min_da: %d"%(min_da))
                 logging.debug("min_loss: %d"%(min_loss))
 
-                
-                _ = curr_a + min_da * angle_step
+                # 3. 计算目标旋转角
+                _ = curr_a + min_da * curr_angle_step
                 # 判定是否触发限幅, 如是则判定angle complete
                 if(_ < - max_abs_a):
                     curr_a = - max_abs_a
                     angle_complete = True
+                    angle_changed = True
                     continue
                 elif(_ > max_abs_a):
                     curr_a = max_abs_a
+                    angle_changed = True
                     angle_complete = True
                     continue
                 
-                # 若未限幅, 向最小loss方向移动
-                curr_a += min_da * angle_step
+                # 4. 检测angle loss是否发生移动
+                if(min_da != 0):
+                    angle_changed = True
+
+                # 5. 若未触发限幅, 向最小loss方向移动
+                curr_a += min_da * curr_angle_step
                 # 更新loss向量(用-1填充向量)
                 if(min_da < 0):
-                    # angle变小, 则向量向右移动
-                    angle_loss = np.full(abs(min_da), -1).extend(angle_loss[:-abs(min_da)])               
+                    # angle变小, 则向量向右移动, 并在左侧填充-1
+                    new_loss = np.full(matrix_size, -1)
+                    new_loss[abs(min_da):] = angle_loss[: matrix_size - abs(min_da)]
+                    angle_loss = new_loss              
                 elif(min_da > 0):
-                    # angle变大, 则向量向左移动
-                    angle_loss = angle_loss[:-abs(min_da)].extend(np.full(abs(min_da), -1))
+                    # angle变大, 则向量向左移动, 并在右侧填充-1
+                    new_loss = np.full(matrix_size, -1)
+                    new_loss[: matrix_size - abs(min_da)] = angle_loss[min_da:]
+                    angle_loss = new_loss
 
                 # 判定angle complete
-                ## 当矩阵未发生更新时结束匹配(此时矩阵无负值)
-                if(angle_loss.min() >= 0):
-                    angle_complete = True
+                if(angle_loss.min() < 0):
+                    ## 旋转角损失向量仍在更新, 则继续运算
+                    pass
+                else:
+                    ## 旋转角损失向量未发生更新(此时矩阵无负值)
+                    if(curr_angle_step >= angle_accu):
+                        ## 旋转角损失向量未发生更新且未达到目标精度时, 继续提高精度
+                        curr_angle_step /= 2.0
+                        ## 清空损失向量, 并重新计算
+                        new_loss = np.full(matrix_size, -1)
+                        new_loss[view_size] = angle_loss[view_size]
+                        angle_loss = new_loss
+                    else:
+                        ## 旋转角损失向量未发生更新且当前精度达到目标精度时, 结束运算
+                        angle_complete = True
+                        if(angle_changed):
+                            # 如果angle发生移动, 则重新匹配xy offset
+                            xy_complete = False
+                            xy_changed = False
+                        else:
+                            # 如果angle和xy都未发生移动, 则抵达最优结束匹配
+                            if(xy_changed == False):
+                                break
 
-            else:
-                # Finish
-                break
 
             # 更新本代计算误差
             loss = self.try_match(
@@ -566,9 +628,9 @@ class LabelChecker():
                 std=target_partition,
                 max_abs_x=min(7, w),
                 max_abs_y=min(7, h),
-                max_abs_a=1.0,
-                max_iterations=10,
-                angle_step=0.0005,
+                max_abs_a=2.5,
+                max_iterations=40,
+                angle_accu=-1,
                 view_size=10,
             )
 

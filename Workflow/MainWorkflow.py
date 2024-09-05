@@ -431,10 +431,10 @@ class MainWorkingFlow():
         # 4. 微调, TODO: 参数可调
         x, y, angle = self._checker.fine_tune(
             test=pattern, std=template_pattern,
-            max_abs_x=20, max_abs_y=20, max_abs_a=1,
+            max_abs_x=80, max_abs_y=80, max_abs_a=1,
             max_iterations=40, 
             shielded_areas=shielded_areas,
-            angle_step=0.0015, view_size=7,
+            angle_accu=0.01, view_size=7,
             show_process=False
         )
 
@@ -451,11 +451,16 @@ class MainWorkingFlow():
         )
 
         # 7. 获得误差图像
+        ## 7.1 计算全局误差
+        global_target_remain = self._checker.cut_with_tol(target_pattern, template_pattern, 0, shielded_areas)
+        global_template_remain = self._checker.cut_with_tol(template_pattern, target_pattern, 0, shielded_areas)
+        global_diff = cv2.bitwise_or(global_target_remain, global_template_remain)
+        ## 7.2 计算区域匹配后的误差
         target_remain = self._checker.cut_with_tol(matched_template_pattern, target_pattern, thickness_tol, shielded_areas)
         template_remain = self._checker.cut_with_tol(target_pattern, matched_template_pattern, thickness_tol, shielded_areas)
-        diff = cv2.bitwise_or(target_remain, template_remain)
-        ## 7.1 消除由于子区域匹配带来的误差
-        diff = cv2.bitwise_and(diff, cv2.absdiff(target_pattern, template_pattern))
+        sub_region_matched_diff = cv2.bitwise_or(target_remain, template_remain)
+        ## 7.3 消除由于子区域匹配带来的误差
+        diff = cv2.bitwise_and(global_diff, sub_region_matched_diff)
         high_pre_diff = None
         if(gen_high_pre_diff):
             target_remain = self._checker.cut_with_tol(matched_template_pattern, target_pattern, 0, shielded_areas)
@@ -724,6 +729,7 @@ class MainWorkingFlow():
                         
                         # 1. 同类标签中绘制误差点
                         contours, hierarchy = cv2.findContours(result.diff, mode=cv2.RETR_TREE, method=cv2.CHAIN_APPROX_NONE)
+                        #if(len(contours) < 30):
                         for c in contours:
                             x, y, w, h = cv2.boundingRect(c)
                             size = w * h
@@ -750,8 +756,8 @@ class MainWorkingFlow():
                                     h=h + box_thickness * 2,
                                 )
                             logging.debug("label: %d, defect size: %d"%(id, w * h))
-                        
-                        ## 2. 标注断墨缺陷
+                    
+                        # 2. 标注断墨缺陷
                         ink_defects = result.ink_defects
                         for defect in ink_defects:
                             [x, y, w, h, confidence, cls] = defect
@@ -806,6 +812,7 @@ class MainWorkingFlow():
                             if(params.export_matched_template):
                                 matched_template_pattern_bgr = cv2.cvtColor(result.matched_template_pattern, cv2.COLOR_GRAY2BGR)
                                 self._ui.add_graphic_detail_to_list("id: " + str(id) + " 匹配后模板样式图", matched_template_pattern_bgr)
+
                         except Exception as e:
                             continue
 
