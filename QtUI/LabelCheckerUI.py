@@ -278,7 +278,6 @@ class LabelCheckerUI(Ui_LabelChecker, QWidget):
         @brief: 设置进度条进度的槽函数
         """
         self._progress_bars[target.name].setValue(value)
-        logging.debug(value)
 
 
     @pyqtSlot(QImage, GraphicWidgets)

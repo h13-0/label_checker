@@ -434,7 +434,7 @@ class MainWorkingFlow():
             max_abs_x=80, max_abs_y=80, max_abs_a=1,
             max_iterations=40, 
             shielded_areas=shielded_areas,
-            angle_accu=0.01, view_size=7,
+            angle_accu=0.01, view_size=3,
             show_process=False
         )
 
@@ -444,6 +444,7 @@ class MainWorkingFlow():
         )
 
         # 6. 将模板分区微调到微调后的待测样式
+        #matched_template_pattern = template_pattern.copy()
         matched_template_pattern = self._checker.match_template_to_target_partitioned(
             template_pattern=template_pattern.copy(),
             target_pattern=target_pattern.copy(),
@@ -756,32 +757,6 @@ class MainWorkingFlow():
                                     h=h + box_thickness * 2,
                                 )
                             logging.debug("label: %d, defect size: %d"%(id, w * h))
-                    
-                        # 2. 标注断墨缺陷
-                        ink_defects = result.ink_defects
-                        for defect in ink_defects:
-                            [x, y, w, h, confidence, cls] = defect
-                            logging.debug(defect)
-                            result.target_transed = cv2.rectangle(
-                                result.target_transed, 
-                                (round(x - box_thickness - w / 2), round(y - box_thickness - h / 2)), 
-                                (round(x + box_thickness + w / 2), round(y + box_thickness + h / 2)), 
-                                (0, 0, 255), 
-                                box_thickness
-                            )
-                            ## 将结果绘制回原图
-                            target_img_with_mark = self._draw_rect_on_src(
-                                src=target_img_with_mark,
-                                label_x=r[0][0] + result.offset_x,
-                                label_y=r[0][1] + result.offset_y,
-                                label_angle=angle,
-                                label_w=template_w,
-                                label_h=template_h,
-                                x=x - box_thickness,
-                                y=y - box_thickness,
-                                w=w + box_thickness * 2,
-                                h=h + box_thickness * 2,
-                            )
 
                         # 3. 输出结果
                         ## 3.0 在操作ui之前确保程序没有被退出
@@ -828,7 +803,8 @@ class MainWorkingFlow():
                 except Exception as e:
                     continue
             # Sleep 0.02s
-            time.sleep(0.02)
+            cv2.waitKey(2)
+            #time.sleep(0.02)
         if(self._editor is not None):
             self._editor.exit()
         logging.info("main workflow exit.")
