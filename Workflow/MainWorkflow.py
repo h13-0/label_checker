@@ -669,7 +669,7 @@ class MainWorkingFlow():
                         target_rect=r,
                         threshold=params.depth_threshold,
                         shielded_areas=template_shielded_areas,
-                        thickness_tol=params.linear_error,
+                        linear_error=params.linear_error,
                         template_defects=[],
                         gen_high_pre_diff=params.export_high_pre_diff
                     )
