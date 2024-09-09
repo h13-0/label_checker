@@ -341,6 +341,8 @@ class LabelChecker():
         border_h = max(math.ceil(std.shape[0] / 10.0), 30)
         std_with_border = cv2.copyMakeBorder(std, border_h, border_h, border_w, border_w, cv2.BORDER_CONSTANT, value=(0))
 
+        # curr_loss为每代所得到的最小误差值
+        curr_loss = -1
         while(iterations < max_iterations and finish == False):
             iterations += 1
             # 判定是否需要角度匹配
@@ -356,14 +358,14 @@ class LabelChecker():
                 curr_x = offset_x
                 curr_y = offset_y
 
-                loss = self.try_match(
+                curr_loss = self.try_match(
                     test, std, 
                     x=round(curr_x), 
                     y=round(curr_y), 
                     angle=curr_a,
                     shielded_areas=shielded_areas,
                     show_diff=show_process
-                )
+                ) 
                 finish = True
             else:
                 ## 计算损失矩阵大小
@@ -455,27 +457,19 @@ class LabelChecker():
                         new_loss[2][view_size] = angle_loss[2][view_size]
                         angle_loss = new_loss
                     else:
-                        ### 4.2.2 如果此时精度打标, 则结束运算
+                        ### 4.2.2 如果此时精度达标, 则结束运算
                         finish = True
+                
+                # 5. 同步本代最小误差结果
+                curr_loss = min_loss
 
-                # 更新本代计算误差
-                loss = self.try_match(
-                    test, std, 
-                    x=round(curr_x), 
-                    y=round(curr_y), 
-                    angle=curr_a,
-                    shielded_areas=shielded_areas,
-                    show_diff=show_process
-                )
+            if(curr_loss < best_loss):
+                best_loss = curr_loss
+                best_params = [curr_x, curr_y, curr_a]
 
-                if(loss < best_loss):
-                    best_loss = loss
-                    best_params = [curr_x, curr_y, curr_a]
-
-            logging.info("iteration: %d, loss: %f, x: %d, y: %d, a: %f" % (iterations, loss, curr_x, curr_y, curr_a))
+            logging.info("iteration: %d, loss: %f, x: %d, y: %d, a: %f" % (iterations, curr_loss, curr_x, curr_y, curr_a))
 
         return best_params
-
 
 
     def cut_with_tol(self, img1:np.ndarray, img2:np.ndarray, tolerance:int, shielded_areas:list=None):
