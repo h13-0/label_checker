@@ -286,7 +286,8 @@ class LabelChecker():
                 # 执行屏蔽
                 trans = cv2.rectangle(trans, (area[0], area[1]), (area[2], area[3]), 0, thickness=cv2.FILLED)
         # 计算像素点误差
-        diff = cv2.absdiff(trans, img2)
+        #diff = cv2.absdiff(trans, img2)
+        diff = cv2.bitwise_xor(trans, img2)
         if(show_diff):
             cv2.imshow("try_match:trans", trans)
             cv2.imshow("try_match:diff", diff)
@@ -482,11 +483,16 @@ class LabelChecker():
             - tolerance: 像素误差值
         '''
         # 先进行膨胀相切(0腐蚀)
-        kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (tolerance * 2 + 1, tolerance * 2 + 1))
-        img1_dilate = cv2.dilate(img1, kernel, 1)
-        img2_dilate = cv2.dilate(img2, kernel, 1)
-        xor = cv2.bitwise_xor(img1_dilate, img2_dilate)
-        remain = cv2.bitwise_and(xor, img2)
+        remain = None
+        if(tolerance > 0):
+            kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (tolerance * 2 + 1, tolerance * 2 + 1))
+            img1_dilate = cv2.dilate(img1, kernel, 1)
+            img2_dilate = cv2.dilate(img2, kernel, 1)
+            xor = cv2.bitwise_xor(img1_dilate, img2_dilate)
+            remain = cv2.bitwise_and(xor, img2)
+        else:
+            xor = cv2.bitwise_xor(img1, img2)
+            remain = cv2.bitwise_and(xor, img2)
 
         # 执行屏蔽
         if(isinstance(shielded_areas, list)):

@@ -468,6 +468,7 @@ class MainWorkingFlow():
             target_remain = self._checker.cut_with_tol(matched_template_pattern, target_pattern, 0, shielded_areas)
             template_remain = self._checker.cut_with_tol(target_pattern, matched_template_pattern, 0, shielded_areas)
             high_pre_diff = cv2.bitwise_or(target_remain, template_remain)
+            high_pre_diff = cv2.bitwise_and(high_pre_diff, global_diff)
 
         # 8. 计算线性变换后原图
         target_transed = self._checker.linear_trans_to(
