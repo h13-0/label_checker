@@ -395,7 +395,7 @@ class MainWorkingFlow():
 
     def _match_label(self, 
         template_pattern, target_img, target_rect, threshold:int, shielded_areas:list,
-        template_defects:list=[], thickness_tol:int = 3,
+        template_defects:list=[], linear_error:int = 3,
         gen_high_pre_diff:bool = False
     ) -> LabelDetectResult:
         """
@@ -406,7 +406,7 @@ class MainWorkingFlow():
             - target_rect: [只读参数], 目标标签所在minAreaRect
             - threshold: [只读参数], 标签图像黑度阈值, 同方法 `_process_template` 中的同名参数
             - template_defects: [只读参数], 标签模板检出缺陷, 用于进行匹配
-            - thickness_tol: [只读参数], 容许的粗细误差
+            - linear_error: [只读参数], 容许的线性偏移误差
         @return:
             - LabelDetectResult类型的匹配结果
         @note: 
@@ -444,11 +444,10 @@ class MainWorkingFlow():
         )
 
         # 6. 将模板分区微调到微调后的待测样式
-        #matched_template_pattern = template_pattern.copy()
         matched_template_pattern = self._checker.match_template_to_target_partitioned(
             template_pattern=template_pattern.copy(),
             target_pattern=target_pattern.copy(),
-            dilate_diameter=4, 
+            dilate_diameter=linear_error, 
             shielded_areas=shielded_areas,
         )
 
@@ -458,8 +457,8 @@ class MainWorkingFlow():
         global_template_remain = self._checker.cut_with_tol(template_pattern, target_pattern, 0, shielded_areas)
         global_diff = cv2.bitwise_or(global_target_remain, global_template_remain)
         ## 7.2 计算区域匹配后的误差
-        target_remain = self._checker.cut_with_tol(matched_template_pattern, target_pattern, thickness_tol, shielded_areas)
-        template_remain = self._checker.cut_with_tol(target_pattern, matched_template_pattern, thickness_tol, shielded_areas)
+        target_remain = self._checker.cut_with_tol(matched_template_pattern, target_pattern, linear_error, shielded_areas)
+        template_remain = self._checker.cut_with_tol(target_pattern, matched_template_pattern, linear_error, shielded_areas)
         sub_region_matched_diff = cv2.bitwise_or(target_remain, template_remain)
         ## 7.3 消除由于子区域匹配带来的误差
         diff = cv2.bitwise_and(global_diff, sub_region_matched_diff)
