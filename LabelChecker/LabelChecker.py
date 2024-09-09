@@ -175,11 +175,11 @@ class LabelChecker():
         return cv2.warpPerspective(src, matrix, (int(w), int(h)))
 
 
-    def get_pattern(self, wraped_img:np.ndarray, threshold:int, shielded_areas:list=None):
+    def get_pattern(self, wrapped_img:np.ndarray, threshold:int, shielded_areas:list=None):
         """
         @brief: 将经过仿射变换的标签图像转化为样式二值图
         @param:
-            - wraped_img: 仿射后的图像
+            - wrapped_img: 仿射后的图像
             - threshold: 黑度阈值(255: 最黑, 0: 最亮)
             - shielded_areas: 需要屏蔽的区域, 在这些区域内的样式二值图会被覆盖为黑色(即屏蔽对应区域)。为list类型, 数据结构定义如下: 
                 [
@@ -188,10 +188,10 @@ class LabelChecker():
                 ]
         """
         # 1. 将图像反色
-        target_wraped_reversed = cv2.bitwise_not(wraped_img)
+        target_wrapped_reversed = cv2.bitwise_not(wrapped_img)
 
         # 2. 将标签图像转为二值图
-        _, target_pattern = cv2.threshold(cv2.cvtColor(target_wraped_reversed, cv2.COLOR_BGR2GRAY), threshold, 255, cv2.THRESH_BINARY)
+        _, target_pattern = cv2.threshold(cv2.cvtColor(target_wrapped_reversed, cv2.COLOR_BGR2GRAY), threshold, 255, cv2.THRESH_BINARY)
 
         # 3. 对选定区域进行屏蔽
         if(isinstance(shielded_areas, list)):
@@ -206,8 +206,8 @@ class LabelChecker():
                     continue
                 # 检查坐标点是否越界
                 if(
-                    area[0] > wraped_img.shape[1] or area[2] > wraped_img.shape[1] or
-                    area[1] > wraped_img.shape[0] or area[3] > wraped_img.shape[0]
+                    area[0] > wrapped_img.shape[1] or area[2] > wrapped_img.shape[1] or
+                    area[1] > wrapped_img.shape[0] or area[3] > wrapped_img.shape[0]
                 ):
                     logging.error("rect point out of bounds: " + str(area))
                     continue

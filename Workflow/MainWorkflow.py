@@ -171,7 +171,7 @@ class MainWorkingFlow():
         # 准备加载yolo模型
         self._detector = None
         ## TODO: 可选加载yolo模型
-        if(True):
+        if(False):
             from LabelChecker.LabelChecker import InkDefectDetector
             self._detector = InkDefectDetector("./weights/yolo.onnx", img_sz=736)
 
@@ -331,7 +331,7 @@ class MainWorkingFlow():
         @return:
             - 返回值为处理后的结果所构成的list
                 [
-                    template_wraped,
+                    template_wrapped,
                     template_partten
                 ]
         """
@@ -348,16 +348,16 @@ class MainWorkingFlow():
         )
 
         # 2. 将模板标签仿射回标准视角
-        temp_wraped = self._checker.wrap_min_aera_rect(template_img, min_rect)
+        temp_wrapped = self._checker.wrap_min_aera_rect(template_img, min_rect)
 
         # 3. 获取标签
         temp_pattern = self._checker.get_pattern(
-            wraped_img=temp_wraped,
+            wrapped_img=temp_wrapped,
             threshold=threshold, 
             shielded_areas=None
         )
 
-        return [temp_wraped, temp_pattern]
+        return [temp_wrapped, temp_pattern]
 
 
     def _find_labels(self, 
@@ -413,10 +413,10 @@ class MainWorkingFlow():
             本函数未来会做为并行运算的方法使用
         """
         # 1. 将模板标签仿射回标准视角
-        target_wraped = self._checker.wrap_min_aera_rect(target_img, target_rect)
+        target_wrapped = self._checker.wrap_min_aera_rect(target_img, target_rect)
 
         # 2. 获取待检图像原始样式
-        pattern = self._checker.get_pattern(target_wraped, threshold)
+        pattern = self._checker.get_pattern(target_wrapped, threshold)
 
         # 3. 监测相似度是否超标
         loss = self._checker.try_match(
@@ -434,7 +434,7 @@ class MainWorkingFlow():
             max_abs_x=80, max_abs_y=80, max_abs_a=1,
             max_iterations=40, 
             shielded_areas=shielded_areas,
-            angle_accu=0.01, view_size=3,
+            angle_accu=0.03, view_size=3,
             show_process=False
         )
 
@@ -444,12 +444,12 @@ class MainWorkingFlow():
         )
 
         # 6. 将模板分区微调到微调后的待测样式
-        #matched_template_pattern = template_pattern.copy()
-        matched_template_pattern = self._checker.match_template_to_target_partitioned(
-            template_pattern=template_pattern.copy(),
-            target_pattern=target_pattern.copy(),
-            shielded_areas=shielded_areas,
-        )
+        matched_template_pattern = template_pattern.copy()
+        #matched_template_pattern = self._checker.match_template_to_target_partitioned(
+        #    template_pattern=template_pattern.copy(),
+        #    target_pattern=target_pattern.copy(),
+        #    shielded_areas=shielded_areas,
+        #)
 
         # 7. 获得误差图像
         ## 7.1 计算全局误差
@@ -470,7 +470,7 @@ class MainWorkingFlow():
 
         # 8. 计算线性变换后原图
         target_transed = self._checker.linear_trans_to(
-            img=target_wraped, x=x, y=y, angle=angle, output_size=[template_pattern.shape[1], template_pattern.shape[0]], border_color=[255, 255, 255]
+            img=target_wrapped, x=x, y=y, angle=angle, output_size=[template_pattern.shape[1], template_pattern.shape[0]], border_color=[255, 255, 255]
         )
 
         # 9. 检测断墨缺陷
@@ -549,7 +549,7 @@ class MainWorkingFlow():
         # 模板原图
         template_img = None
         ## 仿射后的标签
-        template_wraped = None
+        template_wrapped = None
         template_pattern = None
         ## 样式屏蔽区域及OCR-条码核对区
         template_shielded_areas = []
@@ -601,19 +601,20 @@ class MainWorkingFlow():
                             v_min=hsv_thres["v_min"],
                             v_max=hsv_thres["v_max"]
                         )
-                        template_wraped = self._template_wrapped
+                        template_wrapped = self._template_wrapped
 
                         template_shielded_areas = self._template_shielded_areas.copy()
                         template_ocr_bar_code_pairs = self._template_ocr_bar_code_pairs.copy()
 
-                        template_pattern = self._checker.get_pattern(template_wraped, params.depth_threshold)
+                        template_pattern = self._checker.get_pattern(template_wrapped, params.depth_threshold)
                         template_pattern_size = cv2.countNonZero(template_pattern)
                         logging.debug("@main:template_pattern_size: %d"%(template_pattern_size))
 
-                        template_w = template_wraped.shape[1]
-                        template_h = template_wraped.shape[0]
+                        template_w = template_wrapped.shape[1]
+                        template_h = template_wrapped.shape[0]
                         # 在UI中更新图像
                         self._ui.set_graphic_widget(self._template_wrapped, GraphicWidgets.TemplateGraphicView)
+                        #cv2.imwrite("./template_wrapped.jpg", self._template_wrapped)
                         curr_template_id = self._template_id
 
                 ## 检测、更新并同步待测图像
@@ -640,20 +641,6 @@ class MainWorkingFlow():
 
                 ## 将进度条设置为1%表示已经开始运行
                 self._ui.set_progress_bar_value(ProgressBarWidgts.CompareProgressBar, 1)
-
-                ## 生成模板缺陷标定列表
-                template_defects = self._detector.detect(template_wraped)
-                template_wraped_with_defect = template_wraped.copy()
-                for defect in template_defects:
-                    [x, y, w, h, confidence, cls] = defect
-                    template_wraped_with_defect = cv2.rectangle(
-                        template_wraped_with_defect, 
-                        (round(x - box_thickness - w / 2), round(y - box_thickness - h / 2)), 
-                        (round(x + box_thickness + w / 2), round(y + box_thickness + h / 2)), 
-                        (0, 255, 0), 
-                        box_thickness
-                    )
-                self._ui.set_graphic_widget(template_wraped_with_defect, GraphicWidgets.TemplateGraphicView)
                 
                 ## 开始对待检图像进行图像处理 TODO
                 rects = self._find_labels(
@@ -682,7 +669,7 @@ class MainWorkingFlow():
                         threshold=params.depth_threshold,
                         shielded_areas=template_shielded_areas,
                         thickness_tol=params.linear_error,
-                        template_defects=template_defects,
+                        template_defects=[],
                         gen_high_pre_diff=params.export_high_pre_diff
                     )
                     logging.info("labels: " + str(r))
