@@ -444,12 +444,13 @@ class MainWorkingFlow():
         )
 
         # 6. 将模板分区微调到微调后的待测样式
-        matched_template_pattern = template_pattern.copy()
-        #matched_template_pattern = self._checker.match_template_to_target_partitioned(
-        #    template_pattern=template_pattern.copy(),
-        #    target_pattern=target_pattern.copy(),
-        #    shielded_areas=shielded_areas,
-        #)
+        #matched_template_pattern = template_pattern.copy()
+        matched_template_pattern = self._checker.match_template_to_target_partitioned(
+            template_pattern=template_pattern.copy(),
+            target_pattern=target_pattern.copy(),
+            dilate_diameter=4, 
+            shielded_areas=shielded_areas,
+        )
 
         # 7. 获得误差图像
         ## 7.1 计算全局误差

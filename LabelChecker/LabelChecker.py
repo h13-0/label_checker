@@ -495,7 +495,12 @@ class LabelChecker():
         return remain
 
 
-    def match_template_to_target_partitioned(self, template_pattern:np.ndarray, target_pattern:np.ndarray, shielded_areas:list=None):
+    def match_template_to_target_partitioned(self, 
+        template_pattern:np.ndarray, 
+        target_pattern:np.ndarray, 
+        dilate_diameter:int,
+        shielded_areas:list=None
+    ):
         """
         @brief: 将模板分区匹配到目标样式上, 并返回分区匹配后的结果
         @param:
@@ -516,8 +521,11 @@ class LabelChecker():
 
         # 3. 逐个遍历闭合区域, 并进行分区匹配
         result = np.zeros((target_pattern.shape[0], target_pattern.shape[1]), np.uint8)
+        ## 3.1 对图像进行膨胀操作, 避免分区过小
+        kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (dilate_diameter * 2 + 1, dilate_diameter * 2 + 1))
+        closed_pattern_dilated = cv2.dilate(closed_pattern, kernel, 1)
         ## 3.1 寻找闭合区域时只检测外围轮廓
-        contours, hierarchy = cv2.findContours(closed_pattern, mode=cv2.RETR_EXTERNAL, method=cv2.CHAIN_APPROX_NONE)
+        contours, hierarchy = cv2.findContours(closed_pattern_dilated, mode=cv2.RETR_EXTERNAL, method=cv2.CHAIN_APPROX_NONE)
         for c in contours:
             x, y, w, h = cv2.boundingRect(c)
             ## 3.2 分区域进行fine_tune
