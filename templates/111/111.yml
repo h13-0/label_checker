@@ -1,0 +1,15 @@
+barcode_sources: {}
+bartender_md5: 1e4347d4d200c3c3d6e171f3840dd152
+bartender_path: D:/Projects/label_checker/Software/label_checker/templates/EyeS4/EyeS4.btw
+depth_threshold: 130
+hsv_threshold:
+  h_max: 170
+  h_min: 0
+  s_max: 255
+  s_min: 20
+  v_max: 255
+  v_min: 0
+img_sample_path: ./templates\111\111.jpg
+label_h: 948
+label_w: 475
+ocr_sources: {}

@@ -1,0 +1,15 @@
+bartender_path: "./templates/EyeS4/EyeS4.btw"
+bartender_md5: ""
+img_sample_path: "./templates/EyeS4/EyeS4.jpg"
+label_w: 957
+label_h: 485
+hsv_threshold:
+  h_max: 170
+  h_min: 0
+  s_max: 255
+  s_min: 13
+  v_max: 255
+  v_min: 0
+depth_threshold: 170
+barcode_sources: {}
+ocr_sources: {}

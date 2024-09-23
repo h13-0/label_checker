@@ -1,0 +1,21 @@
+hsv_threshold:
+  h_max: 170
+  h_min: 0
+  s_max: 255
+  s_min: 13
+  v_max: 255
+  v_min: 0
+img_type: jpg
+shielded_areas:
+- x1: 731
+  x2: 1621
+  y1: 536
+  y2: 701
+- x1: 1858
+  x2: 3578
+  y1: 415
+  y2: 704
+- x1: 29
+  x2: 1792
+  y1: 1395
+  y2: 1863
