@@ -4,13 +4,15 @@ import time
 
 from PyQt6 import QtCore, QtWidgets
 from PyQt6.QtCore import pyqtSignal, pyqtSlot, Qt
-from PyQt6.QtWidgets import QWidget, QGraphicsScene, QGraphicsPixmapItem, QVBoxLayout, QMessageBox, QApplication, QMenu, QFileDialog
+from PyQt6.QtWidgets import QWidget, QGraphicsScene, QGraphicsPixmapItem, QVBoxLayout, QMessageBox, QApplication, QMenu, \
+    QFileDialog
 from PyQt6.QtGui import QPixmap, QImage, QAction, QCursor
 import logging
 from enum import Enum
 import cv2
 from functools import partial
 from types import MethodType
+
 
 class ButtonCallbackType(Enum):
     """
@@ -74,15 +76,16 @@ class CheckerUIParams():
         - defect_min_area: 检出缺陷最小面积
         - 
     """
-    def __init__(self, 
-        h_min:int = 0, h_max:int = 170, s_min:int = 13, s_max:int = 255,
-        depth_threshold:int = 130, class_similarity:int = 90, 
-        not_good_similarity:int = 95, linear_error:int = 7,
-        defect_min_area:int = 6,
-        export_defeats:bool = True, export_pattern:bool = False,
-        export_diff:bool = False, export_high_pre_diff:bool = False,
-        export_matched_template:bool = False
-    ) -> None:
+
+    def __init__(self,
+                 h_min: int = 0, h_max: int = 170, s_min: int = 13, s_max: int = 255,
+                 depth_threshold: int = 130, class_similarity: int = 90,
+                 not_good_similarity: int = 95, linear_error: int = 7,
+                 defect_min_area: int = 6,
+                 export_defeats: bool = True, export_pattern: bool = False,
+                 export_diff: bool = False, export_high_pre_diff: bool = False,
+                 export_matched_template: bool = False
+                 ) -> None:
         self.h_min = h_min
         self.h_max = h_max
         self.s_min = s_min
@@ -124,20 +127,18 @@ class LabelCheckerUI(Ui_LabelChecker, QWidget):
         # 默认参数
         self._param = CheckerUIParams()
 
-
     def _wheel_event(self, widget, event):
-        if(True):
+        if (True):
             delta = event.angleDelta().y()
             scale = 1 + delta / 1000.0
 
-            if(
-                widget == self.MainGraphicView or
-                widget == self.TemplateGraphicView
+            if (
+                    widget == self.MainGraphicView or
+                    widget == self.TemplateGraphicView
             ):
                 widget.scale(scale, scale)
-            elif(widget in self._graphic_details_graphic_view_list):
+            elif (widget in self._graphic_details_graphic_view_list):
                 widget.scale(scale, scale)
-
 
     def setupUi(self, MainWindow):
         super().setupUi(MainWindow)
@@ -176,29 +177,37 @@ class LabelCheckerUI(Ui_LabelChecker, QWidget):
 
         # 连接回调函数
         ## 模板列表(ComboBox)选中事件
-        self.TemplatesComboBox.currentIndexChanged.connect(lambda:self._cb_changed_callbacks(ComboBoxChangedCallback.TemplatesChanged))
+        self.TemplatesComboBox.currentIndexChanged.connect(
+            lambda: self._cb_changed_callbacks(ComboBoxChangedCallback.TemplatesChanged))
 
         ## 按钮点击事件
-        self.EditTemplateButton.clicked.connect(lambda:self._btn_callbacks(ButtonCallbackType.EditTemplateButton))
-        self.OpenTargetStreamButton.clicked.connect(lambda:self._btn_callbacks(ButtonCallbackType.OpenTargetStreamClicked))
-        self.OpenTargetPhotoButton.clicked.connect(lambda:self._btn_callbacks(ButtonCallbackType.OpenTargetPhotoClicked))
+        self.EditTemplateButton.clicked.connect(lambda: self._btn_callbacks(ButtonCallbackType.EditTemplateButton))
+        self.OpenTargetStreamButton.clicked.connect(
+            lambda: self._btn_callbacks(ButtonCallbackType.OpenTargetStreamClicked))
+        self.OpenTargetPhotoButton.clicked.connect(
+            lambda: self._btn_callbacks(ButtonCallbackType.OpenTargetPhotoClicked))
 
         ## 参数区回调函数
         ### 创建参数枚举和参数控件的映射
         self._param_widgets = {
             _param_changed_source.ClassSimilarityChanged: [self.ClassSimilaritySldider, self.ClassSimilaritySpinBox],
-            _param_changed_source.NotGoodSimilarityChanged: [self.NotGoodSimilaritySlider, self.NotGoodSimilaritySpinBox],
+            _param_changed_source.NotGoodSimilarityChanged: [self.NotGoodSimilaritySlider,
+                                                             self.NotGoodSimilaritySpinBox],
             _param_changed_source.LinearErrorChanged: [self.LinearErrorSlider, self.LinearErrorSpinBox],
             _param_changed_source.DefectMinAreaChanged: [self.DefectMinAreaSlider, self.DefectMinAreaSpinBox],
         }
         self._connect_param_widgets_signal(self._param_widgets)
 
         ### 滑动条滑动时, 将值实时更新到SpinBox, TODO: 并入self._connect_param_widgets_signal
-        self.ClassSimilaritySldider.valueChanged.connect(lambda:self.ClassSimilaritySpinBox.setValue(self.ClassSimilaritySldider.value()))
-        self.NotGoodSimilaritySlider.valueChanged.connect(lambda:self.NotGoodSimilaritySpinBox.setValue(self.NotGoodSimilaritySlider.value()))
-        self.LinearErrorSlider.valueChanged.connect(lambda:self.LinearErrorSpinBox.setValue(self.LinearErrorSlider.value()))
-        self.DefectMinAreaSlider.valueChanged.connect(lambda:self.DefectMinAreaSpinBox.setValue(self.DefectMinAreaSlider.value()))
-        
+        self.ClassSimilaritySldider.valueChanged.connect(
+            lambda: self.ClassSimilaritySpinBox.setValue(self.ClassSimilaritySldider.value()))
+        self.NotGoodSimilaritySlider.valueChanged.connect(
+            lambda: self.NotGoodSimilaritySpinBox.setValue(self.NotGoodSimilaritySlider.value()))
+        self.LinearErrorSlider.valueChanged.connect(
+            lambda: self.LinearErrorSpinBox.setValue(self.LinearErrorSlider.value()))
+        self.DefectMinAreaSlider.valueChanged.connect(
+            lambda: self.DefectMinAreaSpinBox.setValue(self.DefectMinAreaSlider.value()))
+
         ## GraphicView 鼠标滚动缩放
         self.MainGraphicView.wheelEvent = MethodType(self._wheel_event, self.MainGraphicView)
         self.TemplateGraphicView.wheelEvent = MethodType(self._wheel_event, self.TemplateGraphicView)
@@ -210,19 +219,24 @@ class LabelCheckerUI(Ui_LabelChecker, QWidget):
         self._clear_combo_box_signal.connect(self._clear_combo_box)
         ### GraphicView 更新图像
         self._update_graphic_signal.connect(self._update_graphic_view, type=Qt.ConnectionType.BlockingQueuedConnection)
-        self._add_graphic_detail_signal.connect(self._add_graphic_detail, type=Qt.ConnectionType.BlockingQueuedConnection)
-        self._clear_graphic_details_signal.connect(self._clear_graphic_details, type=Qt.ConnectionType.BlockingQueuedConnection)
+        self._add_graphic_detail_signal.connect(self._add_graphic_detail,
+                                                type=Qt.ConnectionType.BlockingQueuedConnection)
+        self._clear_graphic_details_signal.connect(self._clear_graphic_details,
+                                                   type=Qt.ConnectionType.BlockingQueuedConnection)
         ### 进度条更改信号
         self._set_progress_bar_value_signal.connect(self._set_progress_bar_value)
         ### CheckBox点击信号
-        self.ExportDefectsCheckBox.stateChanged.connect(lambda: self._check_box_changed_callback(self.ExportDefectsCheckBox))
-        self.ExportPatternCheckBox.stateChanged.connect(lambda: self._check_box_changed_callback(self.ExportPatternCheckBox))
+        self.ExportDefectsCheckBox.stateChanged.connect(
+            lambda: self._check_box_changed_callback(self.ExportDefectsCheckBox))
+        self.ExportPatternCheckBox.stateChanged.connect(
+            lambda: self._check_box_changed_callback(self.ExportPatternCheckBox))
         self.ExportDiffCheckBox.stateChanged.connect(lambda: self._check_box_changed_callback(self.ExportDiffCheckBox))
-        self.ExportHighPreDiffCheckBox.stateChanged.connect(lambda: self._check_box_changed_callback(self.ExportHighPreDiffCheckBox))
-        self.ExportMatchedTemplateCheckBox.stateChanged.connect(lambda: self._check_box_changed_callback(self.ExportMatchedTemplateCheckBox))
+        self.ExportHighPreDiffCheckBox.stateChanged.connect(
+            lambda: self._check_box_changed_callback(self.ExportHighPreDiffCheckBox))
+        self.ExportMatchedTemplateCheckBox.stateChanged.connect(
+            lambda: self._check_box_changed_callback(self.ExportMatchedTemplateCheckBox))
 
-
-    def _connect_param_widgets_signal(self, param_widget_map:dict):
+    def _connect_param_widgets_signal(self, param_widget_map: dict):
         # 将Slider释放信号和SpinBox修改的信号连接到 `_param_changed_cb`
         for param_enum in param_widget_map:
             slider = param_widget_map[param_enum][0]
@@ -234,18 +248,17 @@ class LabelCheckerUI(Ui_LabelChecker, QWidget):
             # 当Slider滑动时, 将值实时更新到对应的SpinBox
             ## TODO
 
-
-    def _cb_changed_callbacks(self, target:ComboBoxChangedCallback):
+    def _cb_changed_callbacks(self, target: ComboBoxChangedCallback):
         """
         @brief: ComboBox所选目标改变的回调函数, 并非槽函数
         """
-        if(not target.name in self._cb_changed_callback_map):
+        if (not target.name in self._cb_changed_callback_map):
             logging.warning("Callback: " + target.name + " not set.")
         else:
-            self._cb_changed_callback_map[target.name](self.TemplatesComboBox.currentIndex(), self.TemplatesComboBox.currentText())
+            self._cb_changed_callback_map[target.name](self.TemplatesComboBox.currentIndex(),
+                                                       self.TemplatesComboBox.currentText())
 
-
-    def _check_box_changed_callback(self, widget:QtWidgets.QCheckBox):
+    def _check_box_changed_callback(self, widget: QtWidgets.QCheckBox):
         match widget:
             case self.ExportDefectsCheckBox:
                 self._param.export_defeats = self.ExportDefectsCheckBox.isChecked()
@@ -259,30 +272,25 @@ class LabelCheckerUI(Ui_LabelChecker, QWidget):
                 self._param.export_matched_template = self.ExportMatchedTemplateCheckBox.isChecked()
         self._param_callback(self._param)
 
-
     @pyqtSlot(ButtonCallbackType)
-    def _btn_callbacks(self, target:ButtonCallbackType):
+    def _btn_callbacks(self, target: ButtonCallbackType):
         """
         @brief: 按钮的槽函数, 回调事件转发器
         """
-        if(not target.name in self._btn_callback_map):
+        if (not target.name in self._btn_callback_map):
             logging.warning("Callback: " + target.name + " not set.")
         else:
             self._btn_callback_map[target.name]()
 
-
-
     @pyqtSlot(ProgressBarWidgts, int)
-    def _set_progress_bar_value(self, target:ProgressBarWidgts, value:int):
+    def _set_progress_bar_value(self, target: ProgressBarWidgts, value: int):
         """
         @brief: 设置进度条进度的槽函数
         """
         self._progress_bars[target.name].setValue(value)
-        logging.debug(value)
-
 
     @pyqtSlot(QImage, GraphicWidgets)
-    def _update_graphic_view(self, img:QImage, target:GraphicWidgets):
+    def _update_graphic_view(self, img: QImage, target: GraphicWidgets):
         """
         @brief: 更新图像的槽函数
         """
@@ -292,9 +300,8 @@ class LabelCheckerUI(Ui_LabelChecker, QWidget):
         self._graphic_widgets_scenes[target.name].addItem(pixmap_item)
         self._graphic_widgets_scenes[target.name].update()
 
-
     @pyqtSlot(_param_changed_source)
-    def _param_changed_cb(self, source:_param_changed_source):
+    def _param_changed_cb(self, source: _param_changed_source):
         """
         @brief: 参数区变化的槽函数
         """
@@ -303,12 +310,12 @@ class LabelCheckerUI(Ui_LabelChecker, QWidget):
         spin_box = self._param_widgets[source][1]
 
         # 过滤掉由于Slider改变导致的SpinBox改变引发的信号
-        if(
-            (QApplication.focusWidget() == spin_box) or
-            (not slider.isSliderDown())
+        if (
+                (QApplication.focusWidget() == spin_box) or
+                (not slider.isSliderDown())
         ):
             # 如果是SpinBox的更改, 则需要同步到Slider
-            if(QApplication.focusWidget() == spin_box):
+            if (QApplication.focusWidget() == spin_box):
                 slider.setValue(spin_box.value())
             # 更新数值到params
             match source:
@@ -332,13 +339,11 @@ class LabelCheckerUI(Ui_LabelChecker, QWidget):
                     self._param.defect_min_area = slider.value()
             self._param_callback(self._param)
 
-
-    def _add_item_to_templates_combo_box(self, item:str):
+    def _add_item_to_templates_combo_box(self, item: str):
         """
         @brief: 向Templates的ComboBox中添加元素的槽函数
         """
         self.TemplatesComboBox.addItem(item)
-
 
     def _clear_combo_box(self):
         """
@@ -346,27 +351,25 @@ class LabelCheckerUI(Ui_LabelChecker, QWidget):
         """
         self.TemplatesComboBox.clear()
 
-
-    def _img_save_callback(self, id:int):
-        destpath, filetype = QFileDialog.getSaveFileName(self, "文件图像", str(time.time()) + ".jpg", "JPEG图像 (*.jpg)")
+    def _img_save_callback(self, id: int):
+        destpath, filetype = QFileDialog.getSaveFileName(self, "文件图像", str(time.time()) + ".jpg",
+                                                         "JPEG图像 (*.jpg)")
         logging.info(id)
-        if((destpath is not None) and len(destpath)):
+        if ((destpath is not None) and len(destpath)):
             try:
                 self._graphic_details_qimage_list[id].save(destpath)
             except Exception as e:
                 logging.error(e)
-    
 
-    def _create_graphic_detail_menu(self, graphic_view:QtWidgets.QGraphicsView, id:int):
+    def _create_graphic_detail_menu(self, graphic_view: QtWidgets.QGraphicsView, id: int):
         menu = QMenu(graphic_view)
         action = QAction("保存", graphic_view)
-        action.triggered.connect(lambda:self._img_save_callback(id))
+        action.triggered.connect(lambda: self._img_save_callback(id))
         menu.addAction(action)
         menu.popup(QCursor.pos())
 
-
     @pyqtSlot(str, QImage)
-    def _add_graphic_detail(self, title:str, img:QImage):
+    def _add_graphic_detail(self, title: str, img: QImage):
         """
         @brief: 向 "图像详情列表" 中添加图像的槽函数
         @param:
@@ -388,7 +391,7 @@ class LabelCheckerUI(Ui_LabelChecker, QWidget):
         group_box.setMaximumSize(QtCore.QSize(box_w, box_h))
         self.GraphicDetialListvLayout.addWidget(group_box)
         self._graphic_details_group_box_list.append(group_box)
-    
+
         ## 2. 创建scene
         scene = QGraphicsScene()
         self._graphic_details_graphic_scene_list.append(scene)
@@ -405,14 +408,14 @@ class LabelCheckerUI(Ui_LabelChecker, QWidget):
         ## 为GraphicView创建右键菜单
         graphic_view.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         graphic_view.customContextMenuRequested.connect(
-            lambda point, gv=graphic_view, i=len(self._graphic_details_qimage_list)-1:self._create_graphic_detail_menu(graphic_view=gv, id=i)
+            lambda point, gv=graphic_view,
+                   i=len(self._graphic_details_qimage_list) - 1: self._create_graphic_detail_menu(graphic_view=gv, id=i)
         )
         pixmap = QPixmap.fromImage(img)
         pixmap_item = QGraphicsPixmapItem(pixmap)
         scene.clear()
         scene.addItem(pixmap_item)
         scene.update()
-
 
     @pyqtSlot()
     def _clear_graphic_details(self):
@@ -432,24 +435,23 @@ class LabelCheckerUI(Ui_LabelChecker, QWidget):
             box.deleteLater()
         self._graphic_details_group_box_list = []
 
-
     """
     @brief: 创建MessageBox的槽函数
     """
-    def _make_msg_box(self, title:str, text:str):
-        QMessageBox.warning(self, title, text)
 
+    def _make_msg_box(self, title: str, text: str):
+        QMessageBox.warning(self, title, text)
 
     """
     @brief: 设置ComboBox选中目标改变的回调函数
     @param:
         - callback: 回调函数, 函数原型应为: `func(id:int, current_name:str)`
     """
-    def set_cb_changed_callback(self, target:ComboBoxChangedCallback, callback):
+
+    def set_cb_changed_callback(self, target: ComboBoxChangedCallback, callback):
         self._cb_changed_callback_map[target.name] = callback
 
-
-    def set_btn_callback(self, target:ButtonCallbackType, callback):
+    def set_btn_callback(self, target: ButtonCallbackType, callback):
         """
         @brief: 设置按钮回调函数的接口, 可用于设置 `ButtonCallbackType` 中定义的所有类型回调
         @param:
@@ -457,17 +459,14 @@ class LabelCheckerUI(Ui_LabelChecker, QWidget):
         """
         self._btn_callback_map[target.name] = callback
 
-
     def set_params_changed_callback(self, callback):
         self._param_callback = callback
 
-
-    def add_template_option(self, option:str):
+    def add_template_option(self, option: str):
         """
         @brief: 向模板列表中增加选项
         """
         self._add_item_to_templates_combo_box_signal.emit(option)
-
 
     def clear_template_option(self):
         """
@@ -475,8 +474,7 @@ class LabelCheckerUI(Ui_LabelChecker, QWidget):
         """
         self._clear_combo_box_signal.emit()
 
-
-    def set_progress_bar_value(self, target:ProgressBarWidgts, value:int):
+    def set_progress_bar_value(self, target: ProgressBarWidgts, value: int):
         """
         @brief: 设置进度条进度
         @param:
@@ -485,15 +483,14 @@ class LabelCheckerUI(Ui_LabelChecker, QWidget):
         """
         self._set_progress_bar_value_signal.emit(target, value)
 
-
-    def set_graphic_widget(self, cv2_img, target:GraphicWidgets):
+    def set_graphic_widget(self, cv2_img, target: GraphicWidgets):
         """
         @brief: 设置图像控件的图像
         """
         # 获取目标graphic view的size
         target_w = self._graphic_widgets[target.name].width()
         target_h = self._graphic_widgets[target.name].height()
-        logging.debug("Widget: %s, size: (%d, %d)"%(target.name, target_w, target_h))
+        logging.debug("Widget: %s, size: (%d, %d)" % (target.name, target_w, target_h))
         ## 居中铺满放置
         rgb_img = cv2.cvtColor(cv2_img, cv2.COLOR_BGR2RGB)
         y = cv2_img.shape[0]
@@ -501,8 +498,7 @@ class LabelCheckerUI(Ui_LabelChecker, QWidget):
         frame = QImage(rgb_img, x, y, x * 3, QImage.Format.Format_RGB888)
         self._update_graphic_signal.emit(frame, target)
 
-
-    def add_graphic_detail_to_list(self, title:str, cv_img):
+    def add_graphic_detail_to_list(self, title: str, cv_img):
         """
         @brief: 向 "图像详情列表" 中添加图像及其标题
         @param:
@@ -513,7 +509,6 @@ class LabelCheckerUI(Ui_LabelChecker, QWidget):
         y = cv_img.shape[0]
         x = cv_img.shape[1]
         self._add_graphic_detail_signal.emit(title, QImage(rgb_img, x, y, x * 3, QImage.Format.Format_RGB888))
-
 
     def clear_graphic_details(self):
         self._clear_graphic_details_signal.emit()
