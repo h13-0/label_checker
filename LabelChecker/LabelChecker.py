@@ -169,7 +169,7 @@ class LabelChecker():
         matrix = cv2.getPerspectiveTransform(src_array, dst_array)
         return cv2.warpPerspective(src, matrix, (int(w), int(h)))
 
-    def get_pattern(self, wraped_img: np.ndarray, threshold: int, shielded_areas: list = None):
+    def get_pattern(self, wrapped_img: np.ndarray, threshold: int, shielded_areas: list = None):
         """
         @brief: 将经过仿射变换的标签图像转化为样式二值图
         @param:
@@ -182,7 +182,7 @@ class LabelChecker():
                 ]
         """
         # 1. 将图像反色
-        target_wraped_reversed = cv2.bitwise_not(wraped_img)
+        target_wraped_reversed = cv2.bitwise_not(wrapped_img)
 
         # 2. 将标签图像转为二值图
         _, target_pattern = cv2.threshold(cv2.cvtColor(target_wraped_reversed, cv2.COLOR_BGR2GRAY), threshold, 255,
@@ -202,8 +202,8 @@ class LabelChecker():
                     continue
                 # 检查坐标点是否越界
                 if (
-                        area[0] > wraped_img.shape[1] or area[2] > wraped_img.shape[1] or
-                        area[1] > wraped_img.shape[0] or area[3] > wraped_img.shape[0]
+                        area[0] > wrapped_img.shape[1] or area[2] > wraped_img.shape[1] or
+                        area[1] > wrapped_img.shape[0] or area[3] > wraped_img.shape[0]
                 ):
                     logging.error("rect point out of bounds: " + str(area))
                     continue
@@ -696,3 +696,6 @@ class InkDefectDetector():
             return output
         else:
             return defects
+
+
+

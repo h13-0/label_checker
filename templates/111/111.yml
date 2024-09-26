@@ -1,6 +1,6 @@
 barcode_sources: {}
 bartender_md5: 1e4347d4d200c3c3d6e171f3840dd152
-bartender_path: D:/Projects/label_checker/Software/label_checker/templates/EyeS4/EyeS4.btw
+bartender_path: D:\software\label_checker-for-BarTender\templates\EyeS4\EyeS4.btw
 depth_threshold: 130
 hsv_threshold:
   h_max: 170

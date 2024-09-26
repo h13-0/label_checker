@@ -5,16 +5,20 @@ import logging
 from types import MethodType
 import threading
 import copy
-
 import cv2
-
 from PyQt6.QtCore import pyqtSignal, pyqtSlot, Qt, QRectF, QPointF
 from PyQt6.QtWidgets import QWidget, QGraphicsScene, QGraphicsPixmapItem, QGraphicsView, QInputDialog, QMessageBox, QSlider, QSpinBox, QApplication
 from PyQt6.QtGui import QPixmap, QImage, QColor, QStandardItemModel, QStandardItem
-
 from QtUI.Widgets.DraggableResizableRect import DraggableResizableRect
 from Utils.Config import Config
 
+class ShieldedArea():
+    def __init__(self, rect_widget:DraggableResizableRect, id:int) -> None:
+        """
+        @brief: 屏蔽区对象, 用于引用并记录控件, 并生成dict供录入yaml
+        """
+        self._widget = rect_widget
+        self._id = id
 
 class TemplateEditorButtonCallbacks(Enum):
     """
@@ -106,6 +110,7 @@ class TemplateEditorUI(Ui_TemplateEditor, QWidget):
     # 定义Qt信号
     _update_graphic_signal = pyqtSignal(QImage, TemplateEditorGraphicViews)
     ## 添加数据源
+    _add_shield_area_signal = pyqtSignal(int, int, int, int)
     _add_barcode_source_signal = pyqtSignal(str, int, int, int, int)
     _add_ocr_source_signal = pyqtSignal(str, int, int, int, int)
     ## 删除数据源可共用, 因为两个数据源的ID不能重复
@@ -120,11 +125,22 @@ class TemplateEditorUI(Ui_TemplateEditor, QWidget):
         self._name = name
         self._template_list = template_list
 
+
+        ## 屏蔽区域及对照区域列表
+        self._shielded_areas_dict = {}
+        self._ocr_barcode_comparison_pairs_dict = {}
+        self._next_shielded_areas_id = 0
+        self._next_ocr_barcode_comparison_pairs_id = 0
+        self._areas_lock = threading.Lock()
+
+
         ## 按钮回调映射
         self._btn_callback_map = {}
 
         ## 数据源区域列表
         self._barcode_sources =[]
+        self._barcode_sources_dict = {}
+        self._ocr_sources_dict = {}
         self._ocr_sources = []
         self._next_barcode_source_id = 0
         self._next_ocr_source_id = 0
@@ -153,6 +169,19 @@ class TemplateEditorUI(Ui_TemplateEditor, QWidget):
 
         # 初始化UI
         ## 初始化tableView
+
+        # self._shielded_area_list_module = QStandardItemModel(self.BarcodeSourcesList)
+        # self._shielded_area_list_module.setHorizontalHeaderItem(0, QStandardItem("x1"))
+        # self._shielded_area_list_module.setHorizontalHeaderItem(1, QStandardItem("y1"))
+        # self._shielded_area_list_module.setHorizontalHeaderItem(2, QStandardItem("x2"))
+        # self._shielded_area_list_module.setHorizontalHeaderItem(3, QStandardItem("y2"))
+        # self.ShieldedAreaList.setModel(self._shielded_area_list_module)
+        # self.ShieldedAreaList.setColumnWidth(0, 75)
+        # self.ShieldedAreaList.setColumnWidth(1, 75)
+        # self.ShieldedAreaList.setColumnWidth(2, 75)
+        # self.ShieldedAreaList.setColumnWidth(3, 75)
+
+
         self._barcode_source_list_module = QStandardItemModel(self.BarcodeSourcesList)
         self._barcode_source_list_module.setHorizontalHeaderItem(0, QStandardItem("数据源ID"))
         self._barcode_source_list_module.setHorizontalHeaderItem(1, QStandardItem("x1"))
@@ -183,6 +212,8 @@ class TemplateEditorUI(Ui_TemplateEditor, QWidget):
         # 连接信号槽
         ## 连接按钮信号
         ### 专用按钮
+
+
         self.SpecifyBarTenderTemplatePath.clicked.connect(lambda:self._btn_callbacks(TemplateEditorButtonCallbacks.SpecifyBarTenderTemplatePathClicked))
         self.OpenImageSample.clicked.connect(lambda:self._btn_callbacks(TemplateEditorButtonCallbacks.OpenImageSampleClicked))
         self.AddBarcodeSource.clicked.connect(lambda:self._btn_callbacks(TemplateEditorButtonCallbacks.AddBarcodeSourceClicked))
@@ -196,6 +227,8 @@ class TemplateEditorUI(Ui_TemplateEditor, QWidget):
         self._add_ocr_source_signal.connect(self._add_ocr_source_slot, type=Qt.ConnectionType.QueuedConnection)
 
         self._del_source_signal.connect(self._del_source_slot, type=Qt.ConnectionType.QueuedConnection)
+        self._add_shield_area_signal.connect(self._add_shielded_area, type=Qt.ConnectionType.QueuedConnection)
+
 
         # 初始化GraphicView映射
         self._graphic_views = {
@@ -269,7 +302,6 @@ class TemplateEditorUI(Ui_TemplateEditor, QWidget):
                     self._param.depth_threshold = self.DepthThresholdSlider.value()
             self._param_callback(self._param)
 
-
     @pyqtSlot(str, int, int, int, int)
     def _add_barcode_source_slot(self, id:str, x1:int, y1:int, x2:int, y2:int):
         """
@@ -297,11 +329,13 @@ class TemplateEditorUI(Ui_TemplateEditor, QWidget):
             self._barcode_source_list_module.setItem(row, 4, QStandardItem(str(y2)))
 
             # 转为辅助对象
-            area = ImageArea(rect, id)
+            area = ImageArea(rect, str(self._next_barcode_source_id))
             # 存入数据源数组
-            self._barcode_sources.append(area)
+            self._barcode_sources_dict[self._next_barcode_source_id] = area
             # 配置回调函数
             rect.mouseReleaseEvent = MethodType(self._rect_release_event, area)
+            # ID自增
+            self._next_barcode_source_id += 1
 
 
     @pyqtSlot(str, int, int, int, int)
@@ -482,6 +516,8 @@ class TemplateEditorUI(Ui_TemplateEditor, QWidget):
         """
         @brief: 鼠标松开事件, 用于边界检测
         """
+        rect = None
+
         rect = area.get_widget()
         DraggableResizableRect.mouseReleaseEvent(rect, event)
 
@@ -496,8 +532,8 @@ class TemplateEditorUI(Ui_TemplateEditor, QWidget):
         barcode_sources = []
         ocr_sources = []
         with self._sources_lock:
-            barcode_sources = copy.deepcopy(self._barcode_sources)
-            ocr_sources = copy.deepcopy(self._ocr_sources)
+            barcode_sources = list(self._barcode_sources_dict.keys())
+            ocr_sources = list(self._barcode_sources_dict.keys())
         if(area in barcode_sources):
             ## 以下操作需要Python 3.7+
             row = barcode_sources.index(barcode_sources.get_id())
@@ -546,7 +582,7 @@ class TemplateEditorUI(Ui_TemplateEditor, QWidget):
             - x2: 右下角x轴坐标
             - y2: 右下角y轴坐标
         """
-        self._add_barcode_source_signal.emit(id, x1, y1, x2, y2)
+        self._add_barcode_source_signal[str,int,int,int,int].emit(id, x1, y1, x2, y2)
 
 
     def get_barcode_sources(self) -> list:
@@ -556,6 +592,10 @@ class TemplateEditorUI(Ui_TemplateEditor, QWidget):
         barcode_sources = []
         with self._sources_lock:
             barcode_sources = copy.deepcopy(self._barcode_sources)
+            # for key in self._barcode_sources_dict:
+            #     area = self._barcode_sources_dict[key]
+            #     barcode_sources.append(key)
+            #     barcode_sources.append(self._get_coor_from_rect(area.get_widget()))
         return barcode_sources
 
 
@@ -631,9 +671,83 @@ class TemplateEditorUI(Ui_TemplateEditor, QWidget):
     def set_delete_template_callback(self, callback):
         pass
 
+    def add_shielded_area(self, x1:int, y1:int, x2:int, y2:int):
+        self._add_shield_area_signal[int, int, int, int].emit(x1, y1, x2, y2)
+
+
+
+
+    @pyqtSlot(int, int, int, int)
+    def _add_shielded_area(self, x1:int, y1:int, x2:int, y2:int):
+        """
+        向模板中增加屏蔽区域方框
+        """
+        rect = DraggableResizableRect(
+            x=x1,
+            y=y1,
+            width=x2-x1,
+            height=y2-y1,
+            fill_color=QColor(0, 0, 0, 50),
+            edge_color=QColor(0, 0, 0, 100),
+            edge_size=5
+        )
+        # 向scene中添加item
+        self._graphic_views_scenes[TemplateEditorGraphicViews.SampleGraphicView.name].addItem(rect)
+        """
+        识别出屏蔽区域中的SN或者IMEI码
+        """
+        # 向ListView中添加元素
+        with self._areas_lock:
+            row = len(self._barcode_sources_dict)
+            self._barcode_source_list_module.setItem(row, 0, QStandardItem(str(x1)))
+            self._barcode_source_list_module.setItem(row, 1, QStandardItem(str(y1)))
+            self._barcode_source_list_module.setItem(row, 2, QStandardItem(str(x2)))
+            self._barcode_source_list_module.setItem(row, 3, QStandardItem(str(y2)))
+
+            # 转为辅助对象
+            area = ShieldedArea(rect, self._next_barcode_source_id)
+            # 存入字典
+            self._barcode_sources_dict[self._next_barcode_source_id] = area
+            # 配置回调函数
+            rect.mouseReleaseEvent = MethodType(self._rect_release_event, area)
+            #rect.itemChange = MethodType(self._rect_changed_event, rect)
+            # ID自增
+            self._next_barcode_source_id += 1
+
+
+    @pyqtSlot()
+    def _add_shielded_area_callback(self):
+        """
+        @brief: UI内部专用按钮及逻辑的槽函数
+        """
+        self._add_shielded_area(x1=0, y1=0, x2=100, y2=50)
+
+
+    @pyqtSlot()
+    def _del_shielded_area_callback(self):
+        """
+        @brief: 删除屏蔽区域的槽函数
+        """
+        selected_indexs = self.ShieldedAreaList.selectionModel().selectedIndexes()
+        selected_rows = []
+        # 将所选中的行倒序插入列表, 方便删除
+        for index in selected_indexs:
+            if(not index.row() in selected_rows):
+                selected_rows.insert(0, index.row())
+        with self._areas_lock:
+        # 删除对应元素及列表
+            for row in selected_rows:
+                ## 从scene中删除对应元素
+                key = list(self._shielded_areas_dict.keys())[row]
+                self._graphic_views_scenes[TemplateEditorGraphicViews.TemplateGraphicView.name].removeItem(self._shielded_areas_dict[key].get_widget())
+                ## 从列表中删除对应元素
+                self._shielded_area_list_module.removeRow(row)
+                ## 从dict中删除对应元素
+                self._shielded_areas_dict.pop(key)
 
     def set_window_closed_callback(self, callback):
         self._window_closed_cb = callback
+
 
 
     def set_save_template_callback(self, callback):

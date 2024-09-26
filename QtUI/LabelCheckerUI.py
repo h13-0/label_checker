@@ -1,7 +1,5 @@
 from QtUI.Ui_LabelChecker import Ui_LabelChecker
-
 import time
-
 from PyQt6 import QtCore, QtWidgets
 from PyQt6.QtCore import pyqtSignal, pyqtSlot, Qt
 from PyQt6.QtWidgets import QWidget, QGraphicsScene, QGraphicsPixmapItem, QVBoxLayout, QMessageBox, QApplication, QMenu, \
