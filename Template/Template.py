@@ -145,6 +145,8 @@ class Template():
     def set_img_type(self, type: str):
         self._configs["img_type"] = type
 
+    def set_img_sample_path(self,img_sample_path:str):
+        self._configs["img_sample_path"] = img_sample_path
 
     def get_img_sample_path(self):
         """
@@ -162,24 +164,55 @@ class Template():
     def set_name(self, name: str):
         self._name = name
 
-    def get_shielded_areas(self):
-        return self._configs.get("shielded_areas", [])
 
-    def get_barcode_areas(self):
+    def get_barcode_sources(self) -> dict:
+        """
+        @brief: 从模板配置中获取条码数据源
+        @return:
+            由数据源构成的字典。
+            返回示例为：
+            {
+                "id1" : {
+                    "x1": 0,
+                    "y1": 10,
+                    "x2": 100,
+                    "y2": 60
+                },
+                "id2" : {
+                    "x1": 20,
+                    "y1": 50,
+                    "x2": 200,
+                    "y2": 70
+                }
+            }
+        """
         return self._configs.get("barcode_sources", [])
 
-    def get_ocr_areas(self):
+    def get_ocr_sources(self) -> dict:
+        """
+        @brief: 从模板配置中获取OCR数据源
+        @return:
+            由数据源构成的字典。
+            返回示例为：
+            {
+                "id1" : {
+                    "x1": 0,
+                    "y1": 10,
+                    "x2": 100,
+                    "y2": 60
+                },
+                "id2" : {
+                    "x1": 20,
+                    "y1": 50,
+                    "x2": 200,
+                    "y2": 70
+                }
+            }
+        """
         return self._configs.get("ocr_sources", [])
 
-      # area = {}
-        # area["id"] = id
-        # area["x1"] = x1
-        # area["y1"] = y1
-        # area["x2"] = x2
-        # area["y2"] = y2
 
-
-    def add_barcode_source(self, id: str, x1: int, y1: int, x2: int, y2: int):
+    def add_barcode_source(self, id:str,x1: int, y1: int, x2: int, y2: int):
         """
         @brief: 向Template中添加一个条码数据源
         @param:
@@ -189,9 +222,7 @@ class Template():
             - x2: 右下角x轴坐标
             - y2: 右下角y轴坐标
         """
-
         barcode_source = {
-            "id":id,
             "x1": x1,
             "y1": y1,
             "x2": x2,

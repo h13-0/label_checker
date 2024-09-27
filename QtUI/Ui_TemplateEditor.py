@@ -213,6 +213,7 @@ class Ui_TemplateEditor(object):
         self.verticalLayout_5.setContentsMargins(5, 0, 5, 0)
         self.verticalLayout_5.setSpacing(6)
         self.verticalLayout_5.setObjectName("verticalLayout_5")
+
         self.label_7 = QtWidgets.QLabel(parent=self.centralWidget)
         self.label_7.setObjectName("label_7")
         self.verticalLayout_5.addWidget(self.label_7)

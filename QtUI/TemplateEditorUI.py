@@ -138,9 +138,11 @@ class TemplateEditorUI(Ui_TemplateEditor, QWidget):
         self._btn_callback_map = {}
 
         ## 数据源区域列表
-        self._barcode_sources =[]
-        self._barcode_sources_dict = {}
-        self._ocr_sources_dict = {}
+        ### self._xx_sources 为ocr、barcode数据源的存储变量
+        #### 数据类型为 list
+        #### 存储元素为 ImageArea
+        #### 由于 ImageArea 中已经存有数据源id，因此本变量无需再用dict存储
+        self._barcode_sources = []
         self._ocr_sources = []
         self._next_barcode_source_id = 0
         self._next_ocr_source_id = 0
@@ -223,11 +225,12 @@ class TemplateEditorUI(Ui_TemplateEditor, QWidget):
 
         ## 连接自定义信号
         self._update_graphic_signal.connect(self._update_graphic_view, type=Qt.ConnectionType.BlockingQueuedConnection)
+
         self._add_barcode_source_signal.connect(self._add_barcode_source_slot, type=Qt.ConnectionType.QueuedConnection)
         self._add_ocr_source_signal.connect(self._add_ocr_source_slot, type=Qt.ConnectionType.QueuedConnection)
 
         self._del_source_signal.connect(self._del_source_slot, type=Qt.ConnectionType.QueuedConnection)
-        self._add_shield_area_signal.connect(self._add_shielded_area, type=Qt.ConnectionType.QueuedConnection)
+        # self._add_shield_area_signal.connect(self.add_shielded_area, type=Qt.ConnectionType.QueuedConnection)
 
 
         # 初始化GraphicView映射
@@ -319,7 +322,7 @@ class TemplateEditorUI(Ui_TemplateEditor, QWidget):
         # 向scene中添加item
         self._graphic_views_scenes[TemplateEditorGraphicViews.TenderGraphicsView.name].addItem(rect)
         
-        # 向ListView中添加元素
+        # 向ListView中添加元素,保存的时候元素就看这里
         with self._sources_lock:
             row = len(self._barcode_sources)
             self._barcode_source_list_module.setItem(row, 0, QStandardItem(id))
@@ -329,9 +332,9 @@ class TemplateEditorUI(Ui_TemplateEditor, QWidget):
             self._barcode_source_list_module.setItem(row, 4, QStandardItem(str(y2)))
 
             # 转为辅助对象
-            area = ImageArea(rect, str(self._next_barcode_source_id))
-            # 存入数据源数组
-            self._barcode_sources_dict[self._next_barcode_source_id] = area
+            area = ImageArea(rect, id)
+            # 存入数据源列表
+            self._barcode_sources.append(area)
             # 配置回调函数
             rect.mouseReleaseEvent = MethodType(self._rect_release_event, area)
             # ID自增
@@ -370,6 +373,8 @@ class TemplateEditorUI(Ui_TemplateEditor, QWidget):
             self._ocr_sources.append(area)
             # 配置回调函数
             rect.mouseReleaseEvent = MethodType(self._rect_release_event, area)
+            # ID自增
+            self._next_ocr_source_id += 1
 
 
     @pyqtSlot(str)
@@ -516,8 +521,6 @@ class TemplateEditorUI(Ui_TemplateEditor, QWidget):
         """
         @brief: 鼠标松开事件, 用于边界检测
         """
-        rect = None
-
         rect = area.get_widget()
         DraggableResizableRect.mouseReleaseEvent(rect, event)
 
@@ -527,26 +530,29 @@ class TemplateEditorUI(Ui_TemplateEditor, QWidget):
 
         rect.setPos(QPointF(x1, y1))
         rect.setRect(QRectF(0, 0, w, h))
-        
+
         # 更新数据到ListView
         barcode_sources = []
         ocr_sources = []
         with self._sources_lock:
-            barcode_sources = list(self._barcode_sources_dict.keys())
-            ocr_sources = list(self._barcode_sources_dict.keys())
-        if(area in barcode_sources):
-            ## 以下操作需要Python 3.7+
-            row = barcode_sources.index(barcode_sources.get_id())
-            self._barcode_source_list_module.setItem(row, 1, QStandardItem(str(round(x1))))
-            self._barcode_source_list_module.setItem(row, 2, QStandardItem(str(round(y1))))
-            self._barcode_source_list_module.setItem(row, 3, QStandardItem(str(round(x2))))
-            self._barcode_source_list_module.setItem(row, 4, QStandardItem(str(round(y2))))
-        elif(area in ocr_sources):
-            row = ocr_sources.index(ocr_sources.get_id())
-            self._ocr_source_list_module.setItem(row, 1, QStandardItem(str(round(x1))))
-            self._ocr_source_list_module.setItem(row, 2, QStandardItem(str(round(y1))))
-            self._ocr_source_list_module.setItem(row, 3, QStandardItem(str(round(x2))))
-            self._ocr_source_list_module.setItem(row, 4, QStandardItem(str(round(y2))))
+            # 制作barcode_sources的副本
+            barcode_sources_list =   self._barcode_sources
+            ocr_sources_list = self._ocr_sources
+            if area in barcode_sources_list:
+                row = barcode_sources_list.index(area)  # 在barcode_sources_list中查找area的索引位置
+
+                # 更新self._barcode_source_list_module中的数据
+                self._barcode_source_list_module.setItem(row, 1, QStandardItem(str(round(x1))))
+                self._barcode_source_list_module.setItem(row, 2, QStandardItem(str(round(y1))))
+                self._barcode_source_list_module.setItem(row, 3, QStandardItem(str(round(x2))))
+                self._barcode_source_list_module.setItem(row, 4, QStandardItem(str(round(y2))))
+
+            elif(area in ocr_sources_list):
+                row = ocr_sources_list.index(area)
+                self._ocr_source_list_module.setItem(row, 1, QStandardItem(str(round(x1))))
+                self._ocr_source_list_module.setItem(row, 2, QStandardItem(str(round(y1))))
+                self._ocr_source_list_module.setItem(row, 3, QStandardItem(str(round(x2))))
+                self._ocr_source_list_module.setItem(row, 4, QStandardItem(str(round(y2))))
 
 
     def _window_close_event(self, window, event):
@@ -585,17 +591,41 @@ class TemplateEditorUI(Ui_TemplateEditor, QWidget):
         self._add_barcode_source_signal[str,int,int,int,int].emit(id, x1, y1, x2, y2)
 
 
-    def get_barcode_sources(self) -> list:
+    def get_barcode_sources(self) -> dict:
         """
-        @brief: 获取条码源列表
+        @brief: 从UI中获取条码源列表
+        @return:
+            由数据源构成的字典。
+            返回示例为：
+            {
+                "id1" : {
+                    "x1": 0,
+                    "y1": 10,
+                    "x2": 100,
+                    "y2": 60
+                },
+                "id2" : {
+                    "x1": 20,
+                    "y1": 50,
+                    "x2": 200,
+                    "y2": 70
+                }
+            }
         """
-        barcode_sources = []
+        barcode_sources = {}
         with self._sources_lock:
-            barcode_sources = copy.deepcopy(self._barcode_sources)
-            # for key in self._barcode_sources_dict:
-            #     area = self._barcode_sources_dict[key]
-            #     barcode_sources.append(key)
-            #     barcode_sources.append(self._get_coor_from_rect(area.get_widget()))
+            # 这里就是之前的"ShieldedArea"类转 [x1, y1, x2, y2] 的实现，只不过现在"ShieldedArea"类被重命名为了 "ImageArea" 了，
+            # 因为之前只有一个方框的类型(即屏蔽区域)，但是现在有两个数据源类型，barcode和ocr。
+            for source in self._barcode_sources:
+                # 由于 self._barcode_sources 为数组类型，存储的单元为 ImageArea ，因此需要 ImageArea 中的数据提取出来，转换为需要返回的数据结构
+                id = source.get_id()
+                [x1, y1, x2, y2] = self._get_coor_from_rect(source.get_widget())
+                barcode_sources[id] = {
+                    "x1": x1,
+                    "y1": y1,
+                    "x2": x2,
+                    "y2": y2
+                }
         return barcode_sources
 
 
@@ -628,13 +658,25 @@ class TemplateEditorUI(Ui_TemplateEditor, QWidget):
         self._add_ocr_source_signal.emit(id, x1, y1, x2, y2)
 
 
-    def get_ocr_sources(self) -> list:
+    def get_ocr_sources(self) -> dict:
         """
         @brief: 获取OCR源列表
         """
-        ocr_sources = []
+        ocr_sources = {}
         with self._sources_lock:
-            ocr_sources = copy.deepcopy(self._ocr_sources)
+            #barcode_sources = copy.deepcopy(self._barcode_sources)
+            # 这里就是之前的"ShieldedArea"类转 [x1, y1, x2, y2] 的实现，只不过现在"ShieldedArea"类被重命名为了 "ImageArea" 了，
+            # 因为之前只有一个方框的类型(即屏蔽区域)，但是现在有两个数据源类型，barcode和ocr。
+            for source in self._ocr_sources:
+                # 由于 self._barcode_sources 为数组类型，存储的单元为 ImageArea ，因此需要 ImageArea 中的数据提取出来，转换为需要返回的数据结构
+                id = source.get_id()
+                [x1, y1, x2, y2] = self._get_coor_from_rect(source.get_widget())
+                ocr_sources[id] = {
+                    "x1": x1,
+                    "y1": y1,
+                    "x2": x2,
+                    "y2": y2
+                }
         return ocr_sources
 
 
@@ -673,46 +715,6 @@ class TemplateEditorUI(Ui_TemplateEditor, QWidget):
 
     def add_shielded_area(self, x1:int, y1:int, x2:int, y2:int):
         self._add_shield_area_signal[int, int, int, int].emit(x1, y1, x2, y2)
-
-
-
-
-    @pyqtSlot(int, int, int, int)
-    def _add_shielded_area(self, x1:int, y1:int, x2:int, y2:int):
-        """
-        向模板中增加屏蔽区域方框
-        """
-        rect = DraggableResizableRect(
-            x=x1,
-            y=y1,
-            width=x2-x1,
-            height=y2-y1,
-            fill_color=QColor(0, 0, 0, 50),
-            edge_color=QColor(0, 0, 0, 100),
-            edge_size=5
-        )
-        # 向scene中添加item
-        self._graphic_views_scenes[TemplateEditorGraphicViews.SampleGraphicView.name].addItem(rect)
-        """
-        识别出屏蔽区域中的SN或者IMEI码
-        """
-        # 向ListView中添加元素
-        with self._areas_lock:
-            row = len(self._barcode_sources_dict)
-            self._barcode_source_list_module.setItem(row, 0, QStandardItem(str(x1)))
-            self._barcode_source_list_module.setItem(row, 1, QStandardItem(str(y1)))
-            self._barcode_source_list_module.setItem(row, 2, QStandardItem(str(x2)))
-            self._barcode_source_list_module.setItem(row, 3, QStandardItem(str(y2)))
-
-            # 转为辅助对象
-            area = ShieldedArea(rect, self._next_barcode_source_id)
-            # 存入字典
-            self._barcode_sources_dict[self._next_barcode_source_id] = area
-            # 配置回调函数
-            rect.mouseReleaseEvent = MethodType(self._rect_release_event, area)
-            #rect.itemChange = MethodType(self._rect_changed_event, rect)
-            # ID自增
-            self._next_barcode_source_id += 1
 
 
     @pyqtSlot()
