@@ -792,7 +792,7 @@ class MainWorkingFlow():
                 except Exception as e:
                     continue
             # Sleep 0.02s
-            cv2.waitKey(2)
+            time.sleep(0.0002)
             # time.sleep(0.02)
         if (self._editor is not None):
             self._editor.exit()

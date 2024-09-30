@@ -24,7 +24,9 @@ class Template():
             },
             "depth_threshold": 126,
             "barcode_sources": {},
-            "ocr_sources": {}
+            "ocr_sources": {},
+            "img_type":""
+
         }
         self._default_configs = {}
 
@@ -48,7 +50,7 @@ class Template():
         ):
             msg = "\"img_type\" field configuration error."
             logging.error(msg)
-            raise RuntimeError(msg)
+
 
         ## 检查图片文件是否存在
         img_path = self.get_img_path()
@@ -58,7 +60,7 @@ class Template():
         ):
             msg = "img file: " + img_path + " not exists."
             logging.error(msg)
-            raise RuntimeError(msg)
+
 
         ## 将config中的坐标自动转为int
         if ("shielded_areas" in self._configs):
@@ -144,6 +146,7 @@ class Template():
 
     def set_img_type(self, type: str):
         self._configs["img_type"] = type
+
 
     def set_img_sample_path(self,img_sample_path:str):
         self._configs["img_sample_path"] = img_sample_path

@@ -21,6 +21,9 @@ from Template.Template import Template
 from BarTender.BarTender import BarTender
 from Seagull.BarTender.Print import ImageType, ColorDepth, Resolution
 
+from Utils.barcode_ocr_utils import BarcodeRecognizer
+
+
 class TemplateEditor():
     def __init__(self, config:Config, parent:QWidget, template_name:str = "", template_list:list=[]):
         self._ui = TemplateEditorUI(config, template_name, template_list)
@@ -107,8 +110,8 @@ class TemplateEditor():
         
         if(success):
             with self._template_lock:
-                self._template_img = template_img
-                self._template_img_id += 1
+                self._sample_img = template_img
+                self._sample_img_id += 1
             with self._input_changed_lock:
                     self._input_changed = True
 
@@ -224,7 +227,7 @@ class TemplateEditor():
                 sources += self._ui.get_ocr_sources()
                 duplicated = False
                 for i in range(len(sources)):
-                    if(sources[i].get_id() == id):
+                    if(sources[i] == id):
                         duplicated = True
                         break
                 if(not duplicated):
@@ -278,7 +281,7 @@ class TemplateEditor():
                 sources += self._ui.get_ocr_sources()
                 duplicated = False
                 for i in range(len(sources)):
-                    if(sources[i].get_id() == id):
+                    if(sources[i] == id):
                         duplicated = True
                         break
                 if(not duplicated):
@@ -344,7 +347,7 @@ class TemplateEditor():
 
         # 3. 获取标签
         temp_pattern = self._checker.get_pattern(
-            wraped_img=temp_wraped,
+            wrapped_img=temp_wraped,
             threshold=threshold, 
             shielded_areas=None
         )
@@ -497,8 +500,10 @@ class TemplateEditor():
 
         ## 保存图像
         try:
+            self._template = Template(save_path)
             path = os.path.join(save_path, name + ".jpg")
-            cv2.imwrite(path, self._template_img)
+            cv2.imwrite(path, self._sample_img)
+            self._template.set_img_sample_path(path)
         except Exception as e:
             logging.error(e)
             QMessageBox.critical(self, "错误", str(e))
@@ -506,7 +511,7 @@ class TemplateEditor():
         ## 创建模板对象
         if(self._template is None):
             self._template = Template(save_path)
-
+            self._template.set_img_type("jpg")
         ## 导出HSV阈值
         self._template.set_hsv_threshold(
             h_min=self._param.h_min,
@@ -517,11 +522,17 @@ class TemplateEditor():
             v_max=255#self._param.v_max,
         )
         ## 导出屏蔽区域和OCR-条码对照区域
-        shield_areas = self._ui.get_shield_areas()
-        for area in shield_areas:
-            x1, y1, x2, y2 = area
-            self._template.add_shielded_area(x1, y1, x2, y2)
-
+        # 遍历barcode_area字典
+        barcode_area = self._ui.get_barcode_sources()
+        for id, coordinates in barcode_area.items():
+            # 解包坐标值
+            x1, y1, x2, y2 = coordinates["x1"],coordinates["y1"],coordinates["x2"],coordinates["y2"]
+            self._template.add_barcode_source(id, x1, y1, x2, y2)
+        ocr_area = self._ui.get_ocr_sources()
+        for id, coordinates in ocr_area.items():
+            # 解包坐标值
+            x1, y1, x2, y2 = coordinates["x1"], coordinates["y1"], coordinates["x2"], coordinates["y2"]
+            self._template.add_ocr_source(id, x1, y1, x2, y2)
         ## 保存模板
         try:
             self._template.save()
