@@ -52,9 +52,9 @@ class BarTender():
         format.Print()
 
 
-    def __del__(self):
-        if self.btEngine.IsAlive:
-            self.btEngine.Stop()
+    # def __del__(self):
+    #     if self.btEngine.IsAlive:
+    #         self.btEngine.Stop()
 
 
 if __name__ == "__main__":
@@ -64,14 +64,14 @@ if __name__ == "__main__":
         #filename="log/"+datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S") + ".log",
         #filemode="a"
     )
-
+    # SN 与 IMEI 的值
     dict = {
         "SN" : "B2108000033",
         "IMEI": "869128060787361"
     }
 
     tender = BarTender()
-    
+    # btw文件路径
     format = tender.gen_format(r"D:\Projects\label_checker\Software\label_checker\BarTender\eye.btw", dict)
 
     tender.export_format_to_img_file(

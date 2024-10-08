@@ -532,7 +532,35 @@ class TemplateEditor():
         for id, coordinates in ocr_area.items():
             # 解包坐标值
             x1, y1, x2, y2 = coordinates["x1"], coordinates["y1"], coordinates["x2"], coordinates["y2"]
+            image = cv2.imread(path)
             self._template.add_ocr_source(id, x1, y1, x2, y2)
+            # 检查图片是否成功加载
+            if image is None:
+                print("Error: Image cannot be loaded. Please check the path.")
+                exit()
+
+            # 获取左上和右下的坐标
+            top_left_corner= (int(x1),int(y1))
+            bottom_right_corner= (int(x2),int(y2))
+
+            # 在图像上绘制矩形框，颜色为红色，边框厚度为2
+            color = (0, 0, 255)  # BGR格式，这里是红色
+            thickness = 2
+            cv2.rectangle(image, top_left_corner,bottom_right_corner , color, thickness)
+            # 保存带有矩形框的图像
+            name = os.path.splitext(os.path.basename(path))[0]
+            rectangle_img_path = os.path.join(save_path, name+"_"+id + "_with_Rectangle.jpg")
+            cv2.imwrite(rectangle_img_path, image)
+
+            # 接下来裁剪图像
+            x, y = top_left_corner
+            w, h = bottom_right_corner[0] - x, bottom_right_corner[1] - y
+            cropped_image = image[y:y + h, x:x + w]
+            cropped_image_path = os.path.join(save_path, name +"_"+id+ '_Cropped.jpg')
+            # 保存裁剪后的图像
+            cv2.imwrite(cropped_image_path, cropped_image)
+            print("Images have been saved successfully.")
+
         ## 保存模板
         try:
             self._template.save()

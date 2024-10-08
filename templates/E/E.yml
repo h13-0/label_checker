@@ -1,0 +1,23 @@
+barcode_sources: {}
+bartender_path: ''
+depth_threshold: 126
+hsv_threshold:
+  h_max: 170
+  h_min: 0
+  s_max: 255
+  s_min: 13
+  v_max: 255
+  v_min: 0
+img_sample_path: ./templates\E\E.jpg
+img_type: ''
+ocr_sources:
+  IMEI:
+    x1: 129.68721516717653
+    x2: 511.40807490452636
+    y1: 381.7208597373498
+    y2: 435.5532886746684
+  SN:
+    x1: 242.2459302179335
+    x2: 496.72650337616676
+    y1: 134.58107234329643
+    y2: 184.58107234329643
