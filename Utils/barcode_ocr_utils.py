@@ -28,23 +28,23 @@ class OCRRecognizer:
         cropped_image = image.crop(coordinates)
         return cropped_image
 
-# 示例用法
-barcode_recognizer = BarcodeRecognizer()
-ocr_recognizer = OCRRecognizer()
-
-# 通过条形码识别
-barcode_result = barcode_recognizer.recognize_barcode('D:/software/label_checker-for-BarTender/test_img/SN_barcode.png')
-if barcode_result:
-    print("Barcode data:", barcode_result)
-else:
-    print("No barcode detected.")
-
-# 通过OCR识别
-ocr_result = ocr_recognizer.recognize_ocr('D:/software/label_checker-for-BarTender/test_img/SN.png')
-for text in ocr_result:
-    print(text)
-
-# 标定图像并裁剪
-coordinates = (x1, y1, x2, y2)  # 传入四个坐标
-cropped_image = ocr_recognizer.crop_image('image_path', coordinates)
-cropped_image.show()
+# # 示例用法
+# barcode_recognizer = BarcodeRecognizer()
+# ocr_recognizer = OCRRecognizer()
+#
+# # 通过条形码识别
+# barcode_result = barcode_recognizer.recognize_barcode('D:/software/label_checker-for-BarTender/test_img/SN_barcode.png')
+# if barcode_result:
+#     print("Barcode data:", barcode_result)
+# else:
+#     print("No barcode detected.")
+#
+# # 通过OCR识别
+# ocr_result = ocr_recognizer.recognize_ocr('D:/software/label_checker-for-BarTender/test_img/SN.png')
+# for text in ocr_result:
+#     print(text)
+#
+# # 标定图像并裁剪
+# coordinates = (x1, y1, x2, y2)  # 传入四个坐标
+# cropped_image = ocr_recognizer.crop_image('image_path', coordinates)
+# cropped_image.show()
