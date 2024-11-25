@@ -1,5 +1,5 @@
 import clr
-clr.AddReference("Seagull.BarTender.Print")
+clr.AddReference("./Seagull.BarTender.Print")
 from Seagull.BarTender.Print import Engine, Printers, LabelFormatDocument, ImageType, ColorDepth, Resolution, OverwriteOptions
 import logging
 
@@ -52,11 +52,6 @@ class BarTender():
         format.Print()
 
 
-    # def __del__(self):
-    #     if self.btEngine.IsAlive:
-    #         self.btEngine.Stop()
-
-
 if __name__ == "__main__":
     logging.basicConfig(
         format='%(asctime)s - %(filename)s[line:%(lineno)d] - %(levelname)s: %(message)s',
@@ -69,11 +64,9 @@ if __name__ == "__main__":
         "SN" : "B2108000033",
         "IMEI": "869128060787361"
     }
-
     tender = BarTender()
     # btw文件路径
-    format = tender.gen_format(r"D:\Projects\label_checker\Software\label_checker\BarTender\eye.btw", dict)
-
+    format = tender.gen_format(r"D:\software\label_checker-for-BarTender_V2\templates\EyeS4\EyeS4.btw", dict)
     tender.export_format_to_img_file(
         format=format,
         path="./1.jpg",
