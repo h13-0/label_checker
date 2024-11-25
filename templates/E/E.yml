@@ -9,7 +9,7 @@ hsv_threshold:
   v_max: 255
   v_min: 0
 img_sample_path: ./templates\E\E.jpg
-img_type: ''
+img_type: 'jpg'
 ocr_sources:
   IMEI:
     x1: 129.68721516717653

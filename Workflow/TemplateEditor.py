@@ -511,7 +511,7 @@ class TemplateEditor():
         ## 创建模板对象
         if(self._template is None):
             self._template = Template(save_path)
-            self._template.set_img_type("jpg")
+            self._template.set_img_type()
         ## 导出HSV阈值
         self._template.set_hsv_threshold(
             h_min=self._param.h_min,

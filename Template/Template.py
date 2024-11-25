@@ -144,8 +144,8 @@ class Template():
     def set_name(self, name: str):
         self._name = name
 
-    def set_img_type(self, type: str):
-        self._configs["img_type"] = type
+    def set_img_type(self):
+        self._configs["img_type"] = 'jpg'
 
 
     def set_img_sample_path(self,img_sample_path:str):

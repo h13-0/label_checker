@@ -248,11 +248,11 @@ class MainWorkingFlow():
                 try:
                     # 读取图像
                     self._template_src = cv2.imread(self._template_conf.get_img_path())
-                    # 导入屏蔽区域
-                    for area in self._template_conf.get_shielded_areas():
-                        self._template_shielded_areas.append((
-                            area["x1"], area["y1"], area["x2"], area["y2"]
-                        ))
+                    # # 导入屏蔽区域
+                    # for area in self._template_conf.get_shielded_areas():
+                    #     self._template_shielded_areas.append((
+                    #         area["x1"], area["y1"], area["x2"], area["y2"]
+                    #     ))
                     # 导入OCR-条码核对区
                     ## TODO
 

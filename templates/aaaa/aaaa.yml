@@ -19,5 +19,5 @@ hsv_threshold:
   v_max: 255
   v_min: 0
 img_sample_path: ./templates\aaaa\aaaa.jpg
-img_type: jpg
+img_type: 'jpg'
 ocr_sources: {}
