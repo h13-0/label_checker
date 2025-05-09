@@ -576,15 +576,13 @@ class MainWorkingFlow():
                 self._input_changed = False
             
             # 当输入变化时, 重新运算
-            if(input_changed):
-                params = None
-                template_conf = None
-                hsv_thres = None
+            if input_changed:
                 # 拷贝一份参数
                 with self._params_lock:
                     params = self._params
                     template_conf = self._template_conf
                     hsv_thres = template_conf.get_hsv_threshold()
+                    depth_threshold = template_conf.get_depth_threshold()
 
                 # 输入参数发生变化, 重新执行检测标签
                 ## 检测、更新并同步模板图像
@@ -594,7 +592,7 @@ class MainWorkingFlow():
                         template_img = self._template_src.copy()
                         self._template_wrapped, self._template_pattern = self._process_template(
                             template_img=template_img,
-                            threshold=params.depth_threshold,
+                            threshold=depth_threshold,
                             h_min=hsv_thres["h_min"],
                             h_max=hsv_thres["h_max"],
                             s_min=hsv_thres["s_min"],
@@ -607,7 +605,7 @@ class MainWorkingFlow():
                         template_shielded_areas = self._template_shielded_areas.copy()
                         template_ocr_bar_code_pairs = self._template_ocr_bar_code_pairs.copy()
 
-                        template_pattern = self._checker.get_pattern(template_wrapped, params.depth_threshold)
+                        template_pattern = self._checker.get_pattern(template_wrapped, depth_threshold)
                         template_pattern_size = cv2.countNonZero(template_pattern)
                         logging.debug("@main:template_pattern_size: %d"%(template_pattern_size))
 
@@ -667,7 +665,7 @@ class MainWorkingFlow():
                         template_pattern=template_pattern,
                         target_img=target_img,
                         target_rect=r,
-                        threshold=params.depth_threshold,
+                        threshold=depth_threshold,
                         shielded_areas=template_shielded_areas,
                         linear_error=params.linear_error,
                         template_defects=[],

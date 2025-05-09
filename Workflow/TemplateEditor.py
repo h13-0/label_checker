@@ -169,18 +169,20 @@ class TemplateEditor():
             v_max=v_max,
             show_mask = False
         )
+        if min_rect is None:
+            return []
 
         # 2. 将模板标签仿射回标准视角
-        temp_wraped = self._checker.wrap_min_aera_rect(template_img, min_rect)
+        temp_wrapped = self._checker.wrap_min_aera_rect(template_img, min_rect)
 
         # 3. 获取标签
         temp_pattern = self._checker.get_pattern(
-            wraped_img=temp_wraped,
+            wrapped_img=temp_wrapped,
             threshold=threshold, 
             shielded_areas=None
         )
 
-        return [temp_wraped, temp_pattern]
+        return [temp_wrapped, temp_pattern]
 
 
     def _main(self):
