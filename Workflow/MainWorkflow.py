@@ -709,10 +709,10 @@ class MainWorkingFlow():
                         tl, tr, bl, br = self._checker.get_box_point(r)
                         if(tl[1] < tr[1]):
                             # 标签顺时针倾斜
-                            angle = math.acos(abs(tr[0] - tl[0]) / max(r[1][0], r[1][1])) / math.pi * 180.0 + result.offset_angle
+                            angle = np.arccos(abs(tr[0] - tl[0]) / max(r[1][0], r[1][1])) / math.pi * 180.0 + result.offset_angle
                         else:
                             # 标签逆时针倾斜
-                            angle = - (math.acos(abs(tr[0] - tl[0]) / max(r[1][0], r[1][1])) / math.pi * 180.0) + result.offset_angle
+                            angle = - (np.arccos(abs(tr[0] - tl[0]) / max(r[1][0], r[1][1])) / math.pi * 180.0) + result.offset_angle
                         
                         # 1. 同类标签中绘制误差点
                         contours, hierarchy = cv2.findContours(result.diff, mode=cv2.RETR_TREE, method=cv2.CHAIN_APPROX_NONE)
